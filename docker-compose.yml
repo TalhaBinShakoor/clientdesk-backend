@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: clientdesk-postgres
+    environment:
+      POSTGRES_DB: clientdesk
+      POSTGRES_USER: clientdesk
+      POSTGRES_PASSWORD: clientdesk
+    ports:
+      - "5432:5432"
+    volumes:
+      - clientdesk_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  clientdesk_postgres_data:
