@@ -1,5 +1,6 @@
 package com.clientdesk.workrequest;
 
+import com.clientdesk.activity.ActivityEventService;
 import com.clientdesk.client.Client;
 import com.clientdesk.client.ClientRepository;
 import org.springframework.data.jpa.domain.Specification;
@@ -18,10 +19,16 @@ public class WorkRequestService {
 
     private final WorkRequestRepository workRequestRepository;
     private final ClientRepository clientRepository;
+    private final ActivityEventService activityEventService;
 
-    public WorkRequestService(WorkRequestRepository workRequestRepository, ClientRepository clientRepository) {
+    public WorkRequestService(
+            WorkRequestRepository workRequestRepository,
+            ClientRepository clientRepository,
+            ActivityEventService activityEventService
+    ) {
         this.workRequestRepository = workRequestRepository;
         this.clientRepository = clientRepository;
+        this.activityEventService = activityEventService;
     }
 
     @Transactional(readOnly = true)
@@ -53,12 +60,16 @@ public class WorkRequestService {
                 request.dueDate()
         );
 
-        return WorkRequestResponse.from(workRequestRepository.save(workRequest));
+        WorkRequest savedWorkRequest = workRequestRepository.save(workRequest);
+        activityEventService.recordWorkRequestCreated(savedWorkRequest, request.requestedBy());
+
+        return WorkRequestResponse.from(savedWorkRequest);
     }
 
     public WorkRequestResponse update(UUID id, WorkRequestUpdateRequest request) {
         WorkRequest workRequest = findWorkRequest(id);
         Client client = findClient(request.clientId());
+        WorkRequestStatus previousStatus = workRequest.getStatus();
 
         workRequest.setClient(client);
         workRequest.setTitle(request.title());
@@ -68,14 +79,27 @@ public class WorkRequestService {
         workRequest.setRequestedBy(request.requestedBy());
         workRequest.setDueDate(request.dueDate());
         workRequest.markUpdated();
+        activityEventService.recordWorkRequestStatusChanged(
+                workRequest,
+                previousStatus,
+                workRequest.getStatus(),
+                request.requestedBy()
+        );
 
         return WorkRequestResponse.from(workRequest);
     }
 
     public WorkRequestResponse updateStatus(UUID id, WorkRequestStatusUpdateRequest request) {
         WorkRequest workRequest = findWorkRequest(id);
+        WorkRequestStatus previousStatus = workRequest.getStatus();
         workRequest.setStatus(request.status());
         workRequest.markUpdated();
+        activityEventService.recordWorkRequestStatusChanged(
+                workRequest,
+                previousStatus,
+                workRequest.getStatus(),
+                null
+        );
 
         return WorkRequestResponse.from(workRequest);
     }

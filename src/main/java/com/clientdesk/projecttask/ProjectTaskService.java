@@ -1,5 +1,6 @@
 package com.clientdesk.projecttask;
 
+import com.clientdesk.activity.ActivityEventService;
 import com.clientdesk.workrequest.WorkRequest;
 import com.clientdesk.workrequest.WorkRequestRepository;
 import org.springframework.data.jpa.domain.Specification;
@@ -18,13 +19,16 @@ public class ProjectTaskService {
 
     private final ProjectTaskRepository projectTaskRepository;
     private final WorkRequestRepository workRequestRepository;
+    private final ActivityEventService activityEventService;
 
     public ProjectTaskService(
             ProjectTaskRepository projectTaskRepository,
-            WorkRequestRepository workRequestRepository
+            WorkRequestRepository workRequestRepository,
+            ActivityEventService activityEventService
     ) {
         this.projectTaskRepository = projectTaskRepository;
         this.workRequestRepository = workRequestRepository;
+        this.activityEventService = activityEventService;
     }
 
     @Transactional(readOnly = true)
@@ -55,12 +59,16 @@ public class ProjectTaskService {
                 request.dueDate()
         );
 
-        return ProjectTaskResponse.from(projectTaskRepository.save(projectTask));
+        ProjectTask savedProjectTask = projectTaskRepository.save(projectTask);
+        activityEventService.recordProjectTaskCreated(savedProjectTask, null);
+
+        return ProjectTaskResponse.from(savedProjectTask);
     }
 
     public ProjectTaskResponse update(UUID id, ProjectTaskUpdateRequest request) {
         ProjectTask projectTask = findProjectTask(id);
         WorkRequest workRequest = findWorkRequest(request.workRequestId());
+        ProjectTaskStatus previousStatus = projectTask.getStatus();
 
         projectTask.setWorkRequest(workRequest);
         projectTask.setTitle(request.title());
@@ -69,14 +77,27 @@ public class ProjectTaskService {
         projectTask.setAssignee(request.assignee());
         projectTask.setDueDate(request.dueDate());
         projectTask.markUpdated();
+        activityEventService.recordProjectTaskStatusChanged(
+                projectTask,
+                previousStatus,
+                projectTask.getStatus(),
+                null
+        );
 
         return ProjectTaskResponse.from(projectTask);
     }
 
     public ProjectTaskResponse updateStatus(UUID id, ProjectTaskStatusUpdateRequest request) {
         ProjectTask projectTask = findProjectTask(id);
+        ProjectTaskStatus previousStatus = projectTask.getStatus();
         projectTask.setStatus(request.status());
         projectTask.markUpdated();
+        activityEventService.recordProjectTaskStatusChanged(
+                projectTask,
+                previousStatus,
+                projectTask.getStatus(),
+                null
+        );
 
         return ProjectTaskResponse.from(projectTask);
     }
