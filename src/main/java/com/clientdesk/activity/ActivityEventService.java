@@ -1,5 +1,6 @@
 package com.clientdesk.activity;
 
+import com.clientdesk.attachment.RequestAttachment;
 import com.clientdesk.comment.Comment;
 import com.clientdesk.projecttask.ProjectTask;
 import com.clientdesk.projecttask.ProjectTaskStatus;
@@ -116,6 +117,17 @@ public class ActivityEventService {
                 ActivityEventType.COMMENT_ADDED,
                 defaultActor(comment.getAuthorName()),
                 "Comment added"
+        );
+    }
+
+    public void recordFileUploaded(RequestAttachment attachment) {
+        saveEvent(
+                attachment.getWorkRequest(),
+                null,
+                null,
+                ActivityEventType.FILE_UPLOADED,
+                defaultActor(attachment.getUploadedBy()),
+                "File uploaded: %s".formatted(attachment.getOriginalFileName())
         );
     }
 
