@@ -27,6 +27,7 @@ public class AiAssistantService {
     private final WorkRequestRepository workRequestRepository;
     private final CommentRepository commentRepository;
     private final RestClient openAiClient;
+    private final boolean aiEnabled;
     private final String openAiApiKey;
     private final String openAiModel;
 
@@ -34,6 +35,7 @@ public class AiAssistantService {
             WorkRequestRepository workRequestRepository,
             CommentRepository commentRepository,
             RestClient.Builder restClientBuilder,
+            @Value("${clientdesk.ai.enabled:false}") boolean aiEnabled,
             @Value("${clientdesk.ai.openai.api-key:}") String openAiApiKey,
             @Value("${clientdesk.ai.openai.base-url:https://api.openai.com/v1}") String openAiBaseUrl,
             @Value("${clientdesk.ai.openai.model:gpt-5-nano}") String openAiModel
@@ -41,6 +43,7 @@ public class AiAssistantService {
         this.workRequestRepository = workRequestRepository;
         this.commentRepository = commentRepository;
         this.openAiClient = restClientBuilder.baseUrl(openAiBaseUrl).build();
+        this.aiEnabled = aiEnabled;
         this.openAiApiKey = openAiApiKey;
         this.openAiModel = openAiModel;
     }
@@ -154,7 +157,7 @@ public class AiAssistantService {
     }
 
     private String generateWithOpenAi(String prompt, String fallbackContent) {
-        if (openAiApiKey == null || openAiApiKey.isBlank()) {
+        if (!aiEnabled || openAiApiKey == null || openAiApiKey.isBlank()) {
             return fallbackContent;
         }
 
