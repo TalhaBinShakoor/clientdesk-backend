@@ -1,6 +1,7 @@
 package com.clientdesk.attachment;
 
 import com.clientdesk.activity.ActivityEventService;
+import com.clientdesk.security.AccessService;
 import com.clientdesk.workrequest.WorkRequest;
 import com.clientdesk.workrequest.WorkRequestRepository;
 import org.springframework.core.io.Resource;
@@ -37,15 +38,18 @@ public class RequestAttachmentService {
     private final RequestAttachmentRepository requestAttachmentRepository;
     private final WorkRequestRepository workRequestRepository;
     private final ActivityEventService activityEventService;
+    private final AccessService accessService;
 
     public RequestAttachmentService(
             RequestAttachmentRepository requestAttachmentRepository,
             WorkRequestRepository workRequestRepository,
-            ActivityEventService activityEventService
+            ActivityEventService activityEventService,
+            AccessService accessService
     ) {
         this.requestAttachmentRepository = requestAttachmentRepository;
         this.workRequestRepository = workRequestRepository;
         this.activityEventService = activityEventService;
+        this.accessService = accessService;
     }
 
     @Transactional(readOnly = true)
@@ -85,11 +89,12 @@ public class RequestAttachmentService {
 
         RequestAttachment attachment = new RequestAttachment(
                 workRequest,
+                accessService.currentAppUser(),
                 originalFileName,
                 storedFileName,
                 normalizeContentType(file.getContentType()),
                 file.getSize(),
-                normalizeUploadedBy(uploadedBy)
+                accessService.displayName()
         );
 
         RequestAttachment savedAttachment = requestAttachmentRepository.save(attachment);
@@ -154,18 +159,17 @@ public class RequestAttachmentService {
         return trimmed.isBlank() ? "application/octet-stream" : trimmed;
     }
 
-    private String normalizeUploadedBy(String uploadedBy) {
-        String trimmed = uploadedBy == null ? "" : uploadedBy.trim();
-        return trimmed.isBlank() ? null : trimmed;
-    }
-
     private RequestAttachment findAttachment(UUID id) {
-        return requestAttachmentRepository.findById(id)
+        RequestAttachment attachment = requestAttachmentRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Attachment not found"));
+        accessService.requireClientAccess(attachment.getWorkRequest().getClient(), "Attachment");
+        return attachment;
     }
 
     private WorkRequest findWorkRequest(UUID id) {
-        return workRequestRepository.findById(id)
+        WorkRequest workRequest = workRequestRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Work request not found"));
+        accessService.requireClientAccess(workRequest.getClient(), "Work request");
+        return workRequest;
     }
 }

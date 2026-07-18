@@ -1,6 +1,7 @@
 package com.clientdesk.workrequest;
 
 import com.clientdesk.client.Client;
+import com.clientdesk.identity.AppUser;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -32,6 +33,10 @@ public class WorkRequest {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "client_id", nullable = false)
     private Client client;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by_user_id")
+    private AppUser createdByUser;
 
     @NotBlank
     @Size(max = 200)
@@ -67,6 +72,7 @@ public class WorkRequest {
 
     public WorkRequest(
             Client client,
+            AppUser createdByUser,
             String title,
             String description,
             WorkRequestStatus status,
@@ -75,6 +81,7 @@ public class WorkRequest {
             LocalDate dueDate
     ) {
         this.client = client;
+        this.createdByUser = createdByUser;
         this.title = title;
         this.description = description;
         this.status = status == null ? WorkRequestStatus.NEW : status;
@@ -105,6 +112,10 @@ public class WorkRequest {
 
     public Client getClient() {
         return client;
+    }
+
+    public AppUser getCreatedByUser() {
+        return createdByUser;
     }
 
     public void setClient(Client client) {

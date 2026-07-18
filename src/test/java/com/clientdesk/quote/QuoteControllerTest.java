@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,12 +18,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@WithUserDetails("admin@clientdesk.test")
 class QuoteControllerTest {
 
     @Autowired
@@ -35,6 +38,7 @@ class QuoteControllerTest {
         String quoteNumber = uniqueQuoteNumber();
 
         mockMvc.perform(post("/api/quotes")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -116,6 +120,7 @@ class QuoteControllerTest {
         String updatedQuoteNumber = uniqueQuoteNumber();
 
         mockMvc.perform(put("/api/quotes/{id}", quoteId)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -156,6 +161,7 @@ class QuoteControllerTest {
         String quoteId = createQuote(clientId, null, uniqueQuoteNumber(), "DRAFT");
 
         mockMvc.perform(patch("/api/quotes/{id}/status", quoteId)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -165,7 +171,7 @@ class QuoteControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("APPROVED"));
 
-        mockMvc.perform(delete("/api/quotes/{id}", quoteId))
+        mockMvc.perform(delete("/api/quotes/{id}", quoteId).with(csrf()))
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/api/quotes/{id}", quoteId))
@@ -175,6 +181,7 @@ class QuoteControllerTest {
     @Test
     void createQuoteRequiresClientTitleNumberAndLineItems() throws Exception {
         mockMvc.perform(post("/api/quotes")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -187,6 +194,7 @@ class QuoteControllerTest {
     @Test
     void createQuoteReturnsNotFoundForMissingClient() throws Exception {
         mockMvc.perform(post("/api/quotes")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -212,6 +220,7 @@ class QuoteControllerTest {
         String secondWorkRequestId = createWorkRequest(secondClientId, "Other client request " + UUID.randomUUID());
 
         mockMvc.perform(post("/api/quotes")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -233,6 +242,7 @@ class QuoteControllerTest {
 
     private String createClient(String companyName) throws Exception {
         String responseBody = mockMvc.perform(post("/api/clients")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -250,6 +260,7 @@ class QuoteControllerTest {
 
     private String createWorkRequest(String clientId, String title) throws Exception {
         String responseBody = mockMvc.perform(post("/api/work-requests")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -279,6 +290,7 @@ class QuoteControllerTest {
                                   "workRequestId": "%s",
                         """.formatted(workRequestId);
         String responseBody = mockMvc.perform(post("/api/quotes")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

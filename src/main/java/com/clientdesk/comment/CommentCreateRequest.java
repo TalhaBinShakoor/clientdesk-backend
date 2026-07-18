@@ -8,7 +8,7 @@ import java.util.UUID;
 public record CommentCreateRequest(
         UUID workRequestId,
         UUID projectTaskId,
-        @NotBlank @Size(max = 200) String authorName,
+        @Size(max = 200) String authorName,
         @NotBlank String body
 ) {
 }

@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,12 +14,14 @@ import java.util.UUID;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@WithUserDetails("admin@clientdesk.test")
 class AiAssistantControllerTest {
 
     @Autowired
@@ -50,6 +53,7 @@ class AiAssistantControllerTest {
         createComment(workRequestId, "Alex Morgan", "Can you send the next client update?");
 
         mockMvc.perform(post("/api/ai-assistant/work-requests/{workRequestId}/draft-reply", workRequestId)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -71,6 +75,7 @@ class AiAssistantControllerTest {
 
     private String createClient(String companyName) throws Exception {
         String responseBody = mockMvc.perform(post("/api/clients")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -88,6 +93,7 @@ class AiAssistantControllerTest {
 
     private String createWorkRequest(String clientId, String title) throws Exception {
         String responseBody = mockMvc.perform(post("/api/work-requests")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -109,6 +115,7 @@ class AiAssistantControllerTest {
 
     private void createComment(String workRequestId, String authorName, String body) throws Exception {
         mockMvc.perform(post("/api/comments")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

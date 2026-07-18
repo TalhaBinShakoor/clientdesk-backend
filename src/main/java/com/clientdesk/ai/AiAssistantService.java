@@ -3,6 +3,7 @@ package com.clientdesk.ai;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.clientdesk.comment.Comment;
 import com.clientdesk.comment.CommentRepository;
+import com.clientdesk.security.AccessService;
 import com.clientdesk.workrequest.WorkRequest;
 import com.clientdesk.workrequest.WorkRequestRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,11 +31,13 @@ public class AiAssistantService {
     private final boolean aiEnabled;
     private final String openAiApiKey;
     private final String openAiModel;
+    private final AccessService accessService;
 
     public AiAssistantService(
             WorkRequestRepository workRequestRepository,
             CommentRepository commentRepository,
             RestClient.Builder restClientBuilder,
+            AccessService accessService,
             @Value("${clientdesk.ai.enabled:false}") boolean aiEnabled,
             @Value("${clientdesk.ai.openai.api-key:}") String openAiApiKey,
             @Value("${clientdesk.ai.openai.base-url:https://api.openai.com/v1}") String openAiBaseUrl,
@@ -42,6 +45,7 @@ public class AiAssistantService {
     ) {
         this.workRequestRepository = workRequestRepository;
         this.commentRepository = commentRepository;
+        this.accessService = accessService;
         this.openAiClient = restClientBuilder.baseUrl(openAiBaseUrl).build();
         this.aiEnabled = aiEnabled;
         this.openAiApiKey = openAiApiKey;
@@ -152,8 +156,10 @@ public class AiAssistantService {
     }
 
     private WorkRequest findWorkRequest(UUID id) {
-        return workRequestRepository.findById(id)
+        WorkRequest workRequest = workRequestRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Work request not found"));
+        accessService.requireClientAccess(workRequest.getClient(), "Work request");
+        return workRequest;
     }
 
     private String generateWithOpenAi(String prompt, String fallbackContent) {

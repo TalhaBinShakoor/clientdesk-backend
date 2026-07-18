@@ -6,6 +6,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +16,7 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -23,6 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@WithUserDetails("admin@clientdesk.test")
 class RequestAttachmentControllerTest {
 
     @Autowired
@@ -41,8 +44,9 @@ class RequestAttachmentControllerTest {
 
         String responseBody = mockMvc.perform(multipart("/api/request-attachments")
                         .file(file)
+                        .with(csrf())
                         .param("workRequestId", workRequestId)
-                        .param("uploadedBy", "Alex Morgan"))
+                        .param("uploadedBy", "Payload Impostor"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.workRequestId").value(workRequestId))
                 .andExpect(jsonPath("$.originalFileName").value("brief.txt"))
@@ -77,6 +81,7 @@ class RequestAttachmentControllerTest {
         String workRequestId = createWorkRequest(clientId, "Request missing attachment " + UUID.randomUUID());
 
         mockMvc.perform(multipart("/api/request-attachments")
+                        .with(csrf())
                         .param("workRequestId", workRequestId)
                         .param("uploadedBy", "Alex Morgan"))
                 .andExpect(status().isBadRequest());
@@ -84,6 +89,7 @@ class RequestAttachmentControllerTest {
 
     private String createClient(String companyName) throws Exception {
         String responseBody = mockMvc.perform(post("/api/clients")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -101,6 +107,7 @@ class RequestAttachmentControllerTest {
 
     private String createWorkRequest(String clientId, String title) throws Exception {
         String responseBody = mockMvc.perform(post("/api/work-requests")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

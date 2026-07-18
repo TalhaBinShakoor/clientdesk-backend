@@ -1,5 +1,9 @@
 package com.clientdesk.client;
 
+import com.clientdesk.identity.Organization;
+import com.clientdesk.identity.OrganizationRepository;
+import com.clientdesk.security.AccessService;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -14,14 +18,22 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 public class ClientService {
 
     private final ClientRepository clientRepository;
+    private final OrganizationRepository organizationRepository;
+    private final AccessService accessService;
 
-    public ClientService(ClientRepository clientRepository) {
+    public ClientService(
+            ClientRepository clientRepository,
+            OrganizationRepository organizationRepository,
+            AccessService accessService
+    ) {
         this.clientRepository = clientRepository;
+        this.organizationRepository = organizationRepository;
+        this.accessService = accessService;
     }
 
     @Transactional(readOnly = true)
     public List<ClientResponse> findAll() {
-        return clientRepository.findAll()
+        return clientRepository.findAll(accessService.scopeByClientPath())
                 .stream()
                 .map(ClientResponse::from)
                 .toList();
@@ -33,7 +45,10 @@ public class ClientService {
     }
 
     public ClientResponse create(ClientRequest request) {
+        Organization organization = organizationRepository.findById(accessService.organizationId())
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Organization not found"));
         Client client = new Client(
+                organization,
                 request.companyName(),
                 request.contactName(),
                 request.email(),
@@ -65,7 +80,12 @@ public class ClientService {
     }
 
     private Client findClient(UUID id) {
-        return clientRepository.findById(id)
+        Specification<Client> matchingId = (root, query, criteriaBuilder) ->
+                criteriaBuilder.equal(root.get("id"), id);
+        return clientRepository.findOne(Specification.allOf(
+                        accessService.scopeByClientPath(),
+                        matchingId
+                ))
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Client not found"));
     }
 }

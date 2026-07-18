@@ -1,5 +1,6 @@
 package com.clientdesk.client;
 
+import com.clientdesk.identity.Organization;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -7,6 +8,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -24,6 +27,10 @@ public class Client {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+
+    @ManyToOne(fetch = jakarta.persistence.FetchType.LAZY, optional = false)
+    @JoinColumn(name = "organization_id", nullable = false)
+    private Organization organization;
 
     @NotBlank
     @Size(max = 200)
@@ -60,6 +67,19 @@ public class Client {
     }
 
     public Client(String companyName, String contactName, String email, String phone, ClientStatus status, String notes) {
+        this(null, companyName, contactName, email, phone, status, notes);
+    }
+
+    public Client(
+            Organization organization,
+            String companyName,
+            String contactName,
+            String email,
+            String phone,
+            ClientStatus status,
+            String notes
+    ) {
+        this.organization = organization;
         this.companyName = companyName;
         this.contactName = contactName;
         this.email = email;
@@ -86,6 +106,10 @@ public class Client {
 
     public UUID getId() {
         return id;
+    }
+
+    public Organization getOrganization() {
+        return organization;
     }
 
     public String getCompanyName() {

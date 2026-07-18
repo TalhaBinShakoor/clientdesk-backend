@@ -3,6 +3,7 @@ package com.clientdesk.comment;
 import com.clientdesk.activity.ActivityEventService;
 import com.clientdesk.projecttask.ProjectTask;
 import com.clientdesk.projecttask.ProjectTaskRepository;
+import com.clientdesk.security.AccessService;
 import com.clientdesk.workrequest.WorkRequest;
 import com.clientdesk.workrequest.WorkRequestRepository;
 import org.springframework.stereotype.Service;
@@ -23,17 +24,20 @@ public class CommentService {
     private final WorkRequestRepository workRequestRepository;
     private final ProjectTaskRepository projectTaskRepository;
     private final ActivityEventService activityEventService;
+    private final AccessService accessService;
 
     public CommentService(
             CommentRepository commentRepository,
             WorkRequestRepository workRequestRepository,
             ProjectTaskRepository projectTaskRepository,
-            ActivityEventService activityEventService
+            ActivityEventService activityEventService,
+            AccessService accessService
     ) {
         this.commentRepository = commentRepository;
         this.workRequestRepository = workRequestRepository;
         this.projectTaskRepository = projectTaskRepository;
         this.activityEventService = activityEventService;
+        this.accessService = accessService;
     }
 
     @Transactional(readOnly = true)
@@ -70,7 +74,8 @@ public class CommentService {
         Comment comment = new Comment(
                 workRequest,
                 projectTask,
-                request.authorName().trim(),
+                accessService.currentAppUser(),
+                accessService.displayName(),
                 request.body().trim()
         );
         Comment savedComment = commentRepository.save(comment);
@@ -86,12 +91,19 @@ public class CommentService {
     }
 
     private WorkRequest findWorkRequest(UUID id) {
-        return workRequestRepository.findById(id)
+        WorkRequest workRequest = workRequestRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Work request not found"));
+        accessService.requireClientAccess(workRequest.getClient(), "Work request");
+        return workRequest;
     }
 
     private ProjectTask findProjectTask(UUID id) {
-        return projectTaskRepository.findById(id)
+        ProjectTask projectTask = projectTaskRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Project task not found"));
+        accessService.requireClientAccess(
+                projectTask.getWorkRequest().getClient(),
+                "Project task"
+        );
+        return projectTask;
     }
 }

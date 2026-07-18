@@ -2,6 +2,7 @@ package com.clientdesk.quote;
 
 import com.clientdesk.client.Client;
 import com.clientdesk.client.ClientRepository;
+import com.clientdesk.security.AccessService;
 import com.clientdesk.workrequest.WorkRequest;
 import com.clientdesk.workrequest.WorkRequestRepository;
 import org.springframework.data.jpa.domain.Specification;
@@ -27,15 +28,18 @@ public class QuoteService {
     private final QuoteRepository quoteRepository;
     private final ClientRepository clientRepository;
     private final WorkRequestRepository workRequestRepository;
+    private final AccessService accessService;
 
     public QuoteService(
             QuoteRepository quoteRepository,
             ClientRepository clientRepository,
-            WorkRequestRepository workRequestRepository
+            WorkRequestRepository workRequestRepository,
+            AccessService accessService
     ) {
         this.quoteRepository = quoteRepository;
         this.clientRepository = clientRepository;
         this.workRequestRepository = workRequestRepository;
+        this.accessService = accessService;
     }
 
     @Transactional(readOnly = true)
@@ -106,6 +110,7 @@ public class QuoteService {
 
     private Specification<Quote> matchingFilters(QuoteStatus status, UUID clientId, UUID workRequestId) {
         return Specification.allOf(
+                accessService.scopeByClientPath("client"),
                 status == null ? null : (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("status"), status),
                 clientId == null ? null : (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("client").get("id"), clientId),
                 workRequestId == null ? null : (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("workRequest").get("id"), workRequestId)
@@ -153,8 +158,10 @@ public class QuoteService {
     }
 
     private Client findClient(UUID id) {
-        return clientRepository.findById(id)
+        Client client = clientRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Client not found"));
+        accessService.requireClientAccess(client, "Client");
+        return client;
     }
 
     private WorkRequest findOptionalWorkRequest(UUID id, Client client) {
@@ -164,6 +171,7 @@ public class QuoteService {
 
         WorkRequest workRequest = workRequestRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Work request not found"));
+        accessService.requireClientAccess(workRequest.getClient(), "Work request");
 
         if (!workRequest.getClient().getId().equals(client.getId())) {
             throw new ResponseStatusException(BAD_REQUEST, "Work request does not belong to client");
@@ -173,7 +181,9 @@ public class QuoteService {
     }
 
     private Quote findQuote(UUID id) {
-        return quoteRepository.findById(id)
+        Quote quote = quoteRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Quote not found"));
+        accessService.requireClientAccess(quote.getClient(), "Quote");
+        return quote;
     }
 }

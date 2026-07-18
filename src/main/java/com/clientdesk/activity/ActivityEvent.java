@@ -1,5 +1,6 @@
 package com.clientdesk.activity;
 
+import com.clientdesk.identity.AppUser;
 import com.clientdesk.comment.Comment;
 import com.clientdesk.projecttask.ProjectTask;
 import com.clientdesk.workrequest.WorkRequest;
@@ -40,6 +41,10 @@ public class ActivityEvent {
     @JoinColumn(name = "comment_id")
     private Comment comment;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "actor_user_id")
+    private AppUser actorUser;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "event_type", nullable = false, length = 50)
     private ActivityEventType eventType;
@@ -62,6 +67,7 @@ public class ActivityEvent {
             WorkRequest workRequest,
             ProjectTask projectTask,
             Comment comment,
+            AppUser actorUser,
             ActivityEventType eventType,
             String actorName,
             String summary
@@ -69,6 +75,7 @@ public class ActivityEvent {
         this.workRequest = workRequest;
         this.projectTask = projectTask;
         this.comment = comment;
+        this.actorUser = actorUser;
         this.eventType = eventType;
         this.actorName = actorName;
         this.summary = summary;
@@ -93,6 +100,10 @@ public class ActivityEvent {
 
     public Comment getComment() {
         return comment;
+    }
+
+    public AppUser getActorUser() {
+        return actorUser;
     }
 
     public ActivityEventType getEventType() {

@@ -1,5 +1,6 @@
 package com.clientdesk.attachment;
 
+import com.clientdesk.identity.AppUser;
 import com.clientdesk.workrequest.WorkRequest;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -28,6 +29,10 @@ public class RequestAttachment {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "work_request_id", nullable = false)
     private WorkRequest workRequest;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "uploaded_by_user_id")
+    private AppUser uploadedByUser;
 
     @NotBlank
     @Size(max = 255)
@@ -58,6 +63,7 @@ public class RequestAttachment {
 
     public RequestAttachment(
             WorkRequest workRequest,
+            AppUser uploadedByUser,
             String originalFileName,
             String storedFileName,
             String contentType,
@@ -65,6 +71,7 @@ public class RequestAttachment {
             String uploadedBy
     ) {
         this.workRequest = workRequest;
+        this.uploadedByUser = uploadedByUser;
         this.originalFileName = originalFileName;
         this.storedFileName = storedFileName;
         this.contentType = contentType;
@@ -83,6 +90,10 @@ public class RequestAttachment {
 
     public WorkRequest getWorkRequest() {
         return workRequest;
+    }
+
+    public AppUser getUploadedByUser() {
+        return uploadedByUser;
     }
 
     public String getOriginalFileName() {

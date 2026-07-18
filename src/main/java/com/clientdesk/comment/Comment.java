@@ -1,5 +1,6 @@
 package com.clientdesk.comment;
 
+import com.clientdesk.identity.AppUser;
 import com.clientdesk.projecttask.ProjectTask;
 import com.clientdesk.workrequest.WorkRequest;
 import jakarta.persistence.Column;
@@ -35,6 +36,10 @@ public class Comment {
     @JoinColumn(name = "project_task_id")
     private ProjectTask projectTask;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "author_user_id")
+    private AppUser authorUser;
+
     @NotBlank
     @Size(max = 200)
     @Column(name = "author_name", nullable = false, length = 200)
@@ -56,11 +61,13 @@ public class Comment {
     public Comment(
             WorkRequest workRequest,
             ProjectTask projectTask,
+            AppUser authorUser,
             String authorName,
             String body
     ) {
         this.workRequest = workRequest;
         this.projectTask = projectTask;
+        this.authorUser = authorUser;
         this.authorName = authorName;
         this.body = body;
     }
@@ -87,6 +94,10 @@ public class Comment {
 
     public ProjectTask getProjectTask() {
         return projectTask;
+    }
+
+    public AppUser getAuthorUser() {
+        return authorUser;
     }
 
     public String getAuthorName() {

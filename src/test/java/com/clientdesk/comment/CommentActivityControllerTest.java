@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,12 +16,14 @@ import static org.hamcrest.Matchers.hasItems;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@WithUserDetails("admin@clientdesk.test")
 class CommentActivityControllerTest {
 
     @Autowired
@@ -33,6 +36,7 @@ class CommentActivityControllerTest {
         String commentBody = "Please confirm the copy direction.";
 
         mockMvc.perform(post("/api/comments")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -60,6 +64,7 @@ class CommentActivityControllerTest {
         String commentBody = "Checklist draft is ready for review.";
 
         mockMvc.perform(post("/api/comments")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -71,7 +76,7 @@ class CommentActivityControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.workRequestId").doesNotExist())
                 .andExpect(jsonPath("$.projectTaskId").value(projectTaskId))
-                .andExpect(jsonPath("$.authorName").value("Nina Patel"))
+                .andExpect(jsonPath("$.authorName").value("Alex Morgan"))
                 .andExpect(jsonPath("$.body").value(commentBody));
 
         mockMvc.perform(get("/api/comments").param("projectTaskId", projectTaskId))
@@ -86,6 +91,7 @@ class CommentActivityControllerTest {
         String projectTaskId = createProjectTask(workRequestId, "Invalid comment task " + UUID.randomUUID());
 
         mockMvc.perform(post("/api/comments")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -108,6 +114,7 @@ class CommentActivityControllerTest {
         String projectTaskId = createProjectTask(workRequestId, "Timeline task " + UUID.randomUUID());
 
         mockMvc.perform(patch("/api/work-requests/{id}/status", workRequestId)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -117,6 +124,7 @@ class CommentActivityControllerTest {
                 .andExpect(status().isOk());
 
         mockMvc.perform(patch("/api/project-tasks/{id}/status", projectTaskId)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -126,6 +134,7 @@ class CommentActivityControllerTest {
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/comments")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -152,6 +161,7 @@ class CommentActivityControllerTest {
 
     private String createClient(String companyName) throws Exception {
         String responseBody = mockMvc.perform(post("/api/clients")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -169,6 +179,7 @@ class CommentActivityControllerTest {
 
     private String createWorkRequest(String clientId, String title) throws Exception {
         String responseBody = mockMvc.perform(post("/api/work-requests")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -189,6 +200,7 @@ class CommentActivityControllerTest {
 
     private String createProjectTask(String workRequestId, String title) throws Exception {
         String responseBody = mockMvc.perform(post("/api/project-tasks")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

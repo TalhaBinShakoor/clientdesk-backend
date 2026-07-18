@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,12 +18,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@WithUserDetails("admin@clientdesk.test")
 class WorkRequestControllerTest {
 
     @Autowired
@@ -34,6 +37,7 @@ class WorkRequestControllerTest {
         String title = "Launch landing page " + UUID.randomUUID();
 
         mockMvc.perform(post("/api/work-requests")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -90,6 +94,7 @@ class WorkRequestControllerTest {
         );
 
         mockMvc.perform(patch("/api/work-requests/{id}/status", workRequestId)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -99,7 +104,7 @@ class WorkRequestControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("RESOLVED"));
 
-        mockMvc.perform(delete("/api/work-requests/{id}", workRequestId))
+        mockMvc.perform(delete("/api/work-requests/{id}", workRequestId).with(csrf()))
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/api/work-requests/{id}", workRequestId))
@@ -118,6 +123,7 @@ class WorkRequestControllerTest {
         );
 
         mockMvc.perform(put("/api/work-requests/{id}", workRequestId)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -136,13 +142,14 @@ class WorkRequestControllerTest {
                 .andExpect(jsonPath("$.description").value("Updated ticket details"))
                 .andExpect(jsonPath("$.status").value("WAITING_ON_CLIENT"))
                 .andExpect(jsonPath("$.priority").value("LOW"))
-                .andExpect(jsonPath("$.requestedBy").value("Nina Patel"))
+                .andExpect(jsonPath("$.requestedBy").value("Alex Morgan"))
                 .andExpect(jsonPath("$.dueDate").value("2026-09-01"));
     }
 
     @Test
     void createWorkRequestRequiresClientAndTitle() throws Exception {
         mockMvc.perform(post("/api/work-requests")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -155,6 +162,7 @@ class WorkRequestControllerTest {
     @Test
     void createWorkRequestReturnsNotFoundForMissingClient() throws Exception {
         mockMvc.perform(post("/api/work-requests")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -167,6 +175,7 @@ class WorkRequestControllerTest {
 
     private String createClient(String companyName) throws Exception {
         String responseBody = mockMvc.perform(post("/api/clients")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -189,6 +198,7 @@ class WorkRequestControllerTest {
             String priority
     ) throws Exception {
         String responseBody = mockMvc.perform(post("/api/work-requests")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

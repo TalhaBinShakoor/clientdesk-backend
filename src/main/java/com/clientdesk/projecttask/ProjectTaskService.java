@@ -1,6 +1,7 @@
 package com.clientdesk.projecttask;
 
 import com.clientdesk.activity.ActivityEventService;
+import com.clientdesk.security.AccessService;
 import com.clientdesk.workrequest.WorkRequest;
 import com.clientdesk.workrequest.WorkRequestRepository;
 import org.springframework.data.jpa.domain.Specification;
@@ -20,15 +21,18 @@ public class ProjectTaskService {
     private final ProjectTaskRepository projectTaskRepository;
     private final WorkRequestRepository workRequestRepository;
     private final ActivityEventService activityEventService;
+    private final AccessService accessService;
 
     public ProjectTaskService(
             ProjectTaskRepository projectTaskRepository,
             WorkRequestRepository workRequestRepository,
-            ActivityEventService activityEventService
+            ActivityEventService activityEventService,
+            AccessService accessService
     ) {
         this.projectTaskRepository = projectTaskRepository;
         this.workRequestRepository = workRequestRepository;
         this.activityEventService = activityEventService;
+        this.accessService = accessService;
     }
 
     @Transactional(readOnly = true)
@@ -60,7 +64,7 @@ public class ProjectTaskService {
         );
 
         ProjectTask savedProjectTask = projectTaskRepository.save(projectTask);
-        activityEventService.recordProjectTaskCreated(savedProjectTask, null);
+        activityEventService.recordProjectTaskCreated(savedProjectTask);
 
         return ProjectTaskResponse.from(savedProjectTask);
     }
@@ -80,8 +84,7 @@ public class ProjectTaskService {
         activityEventService.recordProjectTaskStatusChanged(
                 projectTask,
                 previousStatus,
-                projectTask.getStatus(),
-                null
+                projectTask.getStatus()
         );
 
         return ProjectTaskResponse.from(projectTask);
@@ -95,8 +98,7 @@ public class ProjectTaskService {
         activityEventService.recordProjectTaskStatusChanged(
                 projectTask,
                 previousStatus,
-                projectTask.getStatus(),
-                null
+                projectTask.getStatus()
         );
 
         return ProjectTaskResponse.from(projectTask);
@@ -113,6 +115,7 @@ public class ProjectTaskService {
             UUID workRequestId
     ) {
         return Specification.allOf(
+                accessService.scopeByClientPath("workRequest", "client"),
                 status == null ? null : (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("status"), status),
                 assignee == null || assignee.isBlank()
                         ? null
@@ -124,12 +127,19 @@ public class ProjectTaskService {
     }
 
     private WorkRequest findWorkRequest(UUID id) {
-        return workRequestRepository.findById(id)
+        WorkRequest workRequest = workRequestRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Work request not found"));
+        accessService.requireClientAccess(workRequest.getClient(), "Work request");
+        return workRequest;
     }
 
     private ProjectTask findProjectTask(UUID id) {
-        return projectTaskRepository.findById(id)
+        ProjectTask projectTask = projectTaskRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Project task not found"));
+        accessService.requireClientAccess(
+                projectTask.getWorkRequest().getClient(),
+                "Project task"
+        );
+        return projectTask;
     }
 }

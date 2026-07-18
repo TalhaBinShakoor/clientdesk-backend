@@ -4,6 +4,7 @@ import com.clientdesk.attachment.RequestAttachment;
 import com.clientdesk.comment.Comment;
 import com.clientdesk.projecttask.ProjectTask;
 import com.clientdesk.projecttask.ProjectTaskStatus;
+import com.clientdesk.security.AccessService;
 import com.clientdesk.workrequest.WorkRequest;
 import com.clientdesk.workrequest.WorkRequestRepository;
 import com.clientdesk.workrequest.WorkRequestStatus;
@@ -20,17 +21,18 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 @Transactional
 public class ActivityEventService {
 
-    private static final String SYSTEM_ACTOR = "ClientDesk";
-
     private final ActivityEventRepository activityEventRepository;
     private final WorkRequestRepository workRequestRepository;
+    private final AccessService accessService;
 
     public ActivityEventService(
             ActivityEventRepository activityEventRepository,
-            WorkRequestRepository workRequestRepository
+            WorkRequestRepository workRequestRepository,
+            AccessService accessService
     ) {
         this.activityEventRepository = activityEventRepository;
         this.workRequestRepository = workRequestRepository;
+        this.accessService = accessService;
     }
 
     @Transactional(readOnly = true)
@@ -43,13 +45,12 @@ public class ActivityEventService {
                 .toList();
     }
 
-    public void recordWorkRequestCreated(WorkRequest workRequest, String actorName) {
+    public void recordWorkRequestCreated(WorkRequest workRequest) {
         saveEvent(
                 workRequest,
                 null,
                 null,
                 ActivityEventType.WORK_REQUEST_CREATED,
-                defaultActor(actorName),
                 "Request created"
         );
     }
@@ -57,8 +58,7 @@ public class ActivityEventService {
     public void recordWorkRequestStatusChanged(
             WorkRequest workRequest,
             WorkRequestStatus previousStatus,
-            WorkRequestStatus nextStatus,
-            String actorName
+            WorkRequestStatus nextStatus
     ) {
         if (previousStatus == nextStatus) {
             return;
@@ -69,18 +69,16 @@ public class ActivityEventService {
                 null,
                 null,
                 ActivityEventType.WORK_REQUEST_STATUS_CHANGED,
-                defaultActor(actorName),
                 "Request status changed from %s to %s".formatted(previousStatus, nextStatus)
         );
     }
 
-    public void recordProjectTaskCreated(ProjectTask projectTask, String actorName) {
+    public void recordProjectTaskCreated(ProjectTask projectTask) {
         saveEvent(
                 projectTask.getWorkRequest(),
                 projectTask,
                 null,
                 ActivityEventType.PROJECT_TASK_CREATED,
-                defaultActor(actorName),
                 "Task created: %s".formatted(projectTask.getTitle())
         );
     }
@@ -88,8 +86,7 @@ public class ActivityEventService {
     public void recordProjectTaskStatusChanged(
             ProjectTask projectTask,
             ProjectTaskStatus previousStatus,
-            ProjectTaskStatus nextStatus,
-            String actorName
+            ProjectTaskStatus nextStatus
     ) {
         if (previousStatus == nextStatus) {
             return;
@@ -100,7 +97,6 @@ public class ActivityEventService {
                 projectTask,
                 null,
                 ActivityEventType.PROJECT_TASK_STATUS_CHANGED,
-                defaultActor(actorName),
                 "Task status changed from %s to %s: %s".formatted(previousStatus, nextStatus, projectTask.getTitle())
         );
     }
@@ -115,7 +111,6 @@ public class ActivityEventService {
                 comment.getProjectTask(),
                 comment,
                 ActivityEventType.COMMENT_ADDED,
-                defaultActor(comment.getAuthorName()),
                 "Comment added"
         );
     }
@@ -126,7 +121,6 @@ public class ActivityEventService {
                 null,
                 null,
                 ActivityEventType.FILE_UPLOADED,
-                defaultActor(attachment.getUploadedBy()),
                 "File uploaded: %s".formatted(attachment.getOriginalFileName())
         );
     }
@@ -136,25 +130,23 @@ public class ActivityEventService {
             ProjectTask projectTask,
             Comment comment,
             ActivityEventType eventType,
-            String actorName,
             String summary
     ) {
         activityEventRepository.save(new ActivityEvent(
                 workRequest,
                 projectTask,
                 comment,
+                accessService.currentAppUser(),
                 eventType,
-                actorName,
+                accessService.displayName(),
                 summary
         ));
     }
 
-    private String defaultActor(String actorName) {
-        return actorName == null || actorName.isBlank() ? SYSTEM_ACTOR : actorName.trim();
-    }
-
     private WorkRequest findWorkRequest(UUID id) {
-        return workRequestRepository.findById(id)
+        WorkRequest workRequest = workRequestRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Work request not found"));
+        accessService.requireClientAccess(workRequest.getClient(), "Work request");
+        return workRequest;
     }
 }

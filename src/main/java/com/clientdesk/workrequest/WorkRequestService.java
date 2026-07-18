@@ -3,6 +3,7 @@ package com.clientdesk.workrequest;
 import com.clientdesk.activity.ActivityEventService;
 import com.clientdesk.client.Client;
 import com.clientdesk.client.ClientRepository;
+import com.clientdesk.security.AccessService;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,15 +21,18 @@ public class WorkRequestService {
     private final WorkRequestRepository workRequestRepository;
     private final ClientRepository clientRepository;
     private final ActivityEventService activityEventService;
+    private final AccessService accessService;
 
     public WorkRequestService(
             WorkRequestRepository workRequestRepository,
             ClientRepository clientRepository,
-            ActivityEventService activityEventService
+            ActivityEventService activityEventService,
+            AccessService accessService
     ) {
         this.workRequestRepository = workRequestRepository;
         this.clientRepository = clientRepository;
         this.activityEventService = activityEventService;
+        this.accessService = accessService;
     }
 
     @Transactional(readOnly = true)
@@ -52,16 +56,17 @@ public class WorkRequestService {
         Client client = findClient(request.clientId());
         WorkRequest workRequest = new WorkRequest(
                 client,
+                accessService.currentAppUser(),
                 request.title(),
                 request.description(),
                 request.status(),
                 request.priority(),
-                request.requestedBy(),
+                accessService.displayName(),
                 request.dueDate()
         );
 
         WorkRequest savedWorkRequest = workRequestRepository.save(workRequest);
-        activityEventService.recordWorkRequestCreated(savedWorkRequest, request.requestedBy());
+        activityEventService.recordWorkRequestCreated(savedWorkRequest);
 
         return WorkRequestResponse.from(savedWorkRequest);
     }
@@ -76,14 +81,12 @@ public class WorkRequestService {
         workRequest.setDescription(request.description());
         workRequest.setStatus(request.status());
         workRequest.setPriority(request.priority());
-        workRequest.setRequestedBy(request.requestedBy());
         workRequest.setDueDate(request.dueDate());
         workRequest.markUpdated();
         activityEventService.recordWorkRequestStatusChanged(
                 workRequest,
                 previousStatus,
-                workRequest.getStatus(),
-                request.requestedBy()
+                workRequest.getStatus()
         );
 
         return WorkRequestResponse.from(workRequest);
@@ -97,8 +100,7 @@ public class WorkRequestService {
         activityEventService.recordWorkRequestStatusChanged(
                 workRequest,
                 previousStatus,
-                workRequest.getStatus(),
-                null
+                workRequest.getStatus()
         );
 
         return WorkRequestResponse.from(workRequest);
@@ -115,6 +117,7 @@ public class WorkRequestService {
             UUID clientId
     ) {
         return Specification.allOf(
+                accessService.scopeByClientPath("client"),
                 status == null ? null : (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("status"), status),
                 priority == null ? null : (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("priority"), priority),
                 clientId == null ? null : (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("client").get("id"), clientId)
@@ -122,12 +125,16 @@ public class WorkRequestService {
     }
 
     private Client findClient(UUID id) {
-        return clientRepository.findById(id)
+        Client client = clientRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Client not found"));
+        accessService.requireClientAccess(client, "Client");
+        return client;
     }
 
     private WorkRequest findWorkRequest(UUID id) {
-        return workRequestRepository.findById(id)
+        WorkRequest workRequest = workRequestRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Work request not found"));
+        accessService.requireClientAccess(workRequest.getClient(), "Work request");
+        return workRequest;
     }
 }
