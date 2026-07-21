@@ -9,6 +9,6 @@ public record CommentCreateRequest(
         UUID workRequestId,
         UUID projectTaskId,
         @Size(max = 200) String authorName,
-        @NotBlank String body
+        @NotBlank @Size(max = 5000) String body
 ) {
 }

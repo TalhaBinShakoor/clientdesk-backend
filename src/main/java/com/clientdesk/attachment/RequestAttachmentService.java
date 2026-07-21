@@ -1,99 +1,118 @@
 package com.clientdesk.attachment;
 
 import com.clientdesk.activity.ActivityEventService;
+import com.clientdesk.api.ApiPage;
+import com.clientdesk.identity.OrganizationRepository;
 import com.clientdesk.security.AccessService;
 import com.clientdesk.workrequest.WorkRequest;
 import com.clientdesk.workrequest.WorkRequestRepository;
 import org.springframework.core.io.Resource;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.core.io.UrlResource;
+import org.springframework.http.ContentDisposition;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.web.util.UriUtils;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.MalformedURLException;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.HttpStatus.CONFLICT;
 import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
+import static org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE;
 
 @Service
 @Transactional
 public class RequestAttachmentService {
 
-    private static final Path UPLOAD_ROOT = Paths.get("uploads", "request-attachments")
-            .toAbsolutePath()
-            .normalize();
-
     private final RequestAttachmentRepository requestAttachmentRepository;
     private final WorkRequestRepository workRequestRepository;
+    private final OrganizationRepository organizationRepository;
     private final ActivityEventService activityEventService;
     private final AccessService accessService;
+    private final AttachmentProperties properties;
+    private final AttachmentFileValidator fileValidator;
+    private final Path uploadRoot;
 
     public RequestAttachmentService(
             RequestAttachmentRepository requestAttachmentRepository,
             WorkRequestRepository workRequestRepository,
+            OrganizationRepository organizationRepository,
             ActivityEventService activityEventService,
-            AccessService accessService
+            AccessService accessService,
+            AttachmentProperties properties,
+            AttachmentFileValidator fileValidator
     ) {
         this.requestAttachmentRepository = requestAttachmentRepository;
         this.workRequestRepository = workRequestRepository;
+        this.organizationRepository = organizationRepository;
         this.activityEventService = activityEventService;
         this.accessService = accessService;
+        this.properties = properties;
+        this.fileValidator = fileValidator;
+        this.uploadRoot = properties.getStorageRoot().toAbsolutePath().normalize();
     }
 
     @Transactional(readOnly = true)
-    public List<RequestAttachmentResponse> findAll(UUID workRequestId) {
+    public ApiPage<RequestAttachmentResponse> findAll(UUID workRequestId, int page, int size) {
         findWorkRequest(workRequestId);
 
-        return requestAttachmentRepository.findByWorkRequest_IdOrderByCreatedAtDesc(workRequestId)
-                .stream()
-                .map(RequestAttachmentResponse::from)
-                .toList();
+        return ApiPage.from(
+                requestAttachmentRepository.findByWorkRequest_IdOrderByCreatedAtDesc(
+                        workRequestId,
+                        PageRequest.of(page, size)
+                ),
+                RequestAttachmentResponse::from
+        );
     }
 
-    public RequestAttachmentResponse upload(UUID workRequestId, MultipartFile file, String uploadedBy) {
+    public RequestAttachmentResponse upload(UUID workRequestId, MultipartFile file) {
         WorkRequest workRequest = findWorkRequest(workRequestId);
+        ValidatedAttachmentFile validatedFile = fileValidator.validate(file);
+        UUID organizationId = workRequest.getClient().getOrganization().getId();
+        organizationRepository.lockById(organizationId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Organization not found"));
 
-        if (file == null || file.isEmpty()) {
-            throw new ResponseStatusException(BAD_REQUEST, "File is required");
+        long attachmentCount = requestAttachmentRepository.countByWorkRequest_Id(workRequestId);
+        if (attachmentCount >= properties.getMaxFilesPerWorkRequest()) {
+            throw new ResponseStatusException(CONFLICT, "Work request attachment limit reached");
+        }
+        long organizationBytes = requestAttachmentRepository.sumSizeBytesByOrganizationId(organizationId);
+        if (validatedFile.content().length > properties.getMaxBytesPerOrganization() - organizationBytes) {
+            throw new ResponseStatusException(PAYLOAD_TOO_LARGE, "Organization attachment storage limit reached");
         }
 
-        String originalFileName = sanitizeFileName(file.getOriginalFilename());
-        String storedFileName = UUID.randomUUID() + extensionFrom(originalFileName);
-        Path destination = UPLOAD_ROOT.resolve(storedFileName).normalize();
-
-        if (!destination.startsWith(UPLOAD_ROOT)) {
-            throw new ResponseStatusException(BAD_REQUEST, "Invalid file name");
-        }
-
+        String storedFileName = organizationId + "/" + workRequestId + "/"
+                + UUID.randomUUID() + validatedFile.extension();
+        Path destination = resolveStoredFile(storedFileName);
         try {
-            Files.createDirectories(UPLOAD_ROOT);
-
-            try (InputStream inputStream = file.getInputStream()) {
-                Files.copy(inputStream, destination, StandardCopyOption.REPLACE_EXISTING);
-            }
+            Files.createDirectories(destination.getParent());
+            Files.write(destination, validatedFile.content(), StandardOpenOption.CREATE_NEW);
+            deleteFileAfterRollback(destination);
         } catch (IOException exception) {
+            deleteQuietly(destination);
             throw new ResponseStatusException(INTERNAL_SERVER_ERROR, "File could not be stored", exception);
         }
 
         RequestAttachment attachment = new RequestAttachment(
                 workRequest,
                 accessService.currentAppUser(),
-                originalFileName,
+                validatedFile.originalFileName(),
                 storedFileName,
-                normalizeContentType(file.getContentType()),
-                file.getSize(),
+                validatedFile.contentType(),
+                validatedFile.content().length,
                 accessService.displayName()
         );
 
@@ -106,11 +125,7 @@ public class RequestAttachmentService {
     @Transactional(readOnly = true)
     public RequestAttachmentDownload loadDownload(UUID id) {
         RequestAttachment attachment = findAttachment(id);
-        Path filePath = UPLOAD_ROOT.resolve(attachment.getStoredFileName()).normalize();
-
-        if (!filePath.startsWith(UPLOAD_ROOT)) {
-            throw new ResponseStatusException(BAD_REQUEST, "Invalid file path");
-        }
+        Path filePath = resolveStoredFile(attachment.getStoredFileName());
 
         try {
             Resource resource = new UrlResource(filePath.toUri());
@@ -126,37 +141,84 @@ public class RequestAttachmentService {
     }
 
     public String contentDispositionValue(RequestAttachment attachment) {
-        String encodedFileName = UriUtils.encode(attachment.getOriginalFileName(), StandardCharsets.UTF_8);
-        return "attachment; filename*=UTF-8''" + encodedFileName;
+        return ContentDisposition.attachment()
+                .filename(attachment.getOriginalFileName(), StandardCharsets.UTF_8)
+                .build()
+                .toString();
     }
 
-    private String sanitizeFileName(String fileName) {
-        String sanitized = Path.of(fileName == null ? "attachment" : fileName)
-                .getFileName()
-                .toString()
-                .trim()
-                .replaceAll("[\\r\\n]", "");
+    public void deleteFilesForWorkRequestAfterCommit(UUID workRequestId) {
+        deleteFilesAfterCommit(
+                requestAttachmentRepository.findStoredFileNamesByWorkRequestId(workRequestId)
+        );
+    }
 
-        if (sanitized.isBlank()) {
-            return "attachment";
+    public void deleteFilesForClientAfterCommit(UUID clientId) {
+        deleteFilesAfterCommit(
+                requestAttachmentRepository.findStoredFileNamesByClientId(clientId)
+        );
+    }
+
+    private Path resolveStoredFile(String storedFileName) {
+        Path resolved = uploadRoot.resolve(storedFileName).normalize();
+        if (!resolved.startsWith(uploadRoot)) {
+            throw new ResponseStatusException(BAD_REQUEST, "Invalid file path");
         }
-
-        return sanitized.length() > 255 ? sanitized.substring(sanitized.length() - 255) : sanitized;
+        return resolved;
     }
 
-    private String extensionFrom(String fileName) {
-        int dotIndex = fileName.lastIndexOf('.');
-
-        if (dotIndex < 0 || dotIndex == fileName.length() - 1) {
-            return "";
+    private void deleteFileAfterRollback(Path path) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
         }
-
-        return fileName.substring(dotIndex);
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status != STATUS_COMMITTED) {
+                    deleteQuietly(path);
+                }
+            }
+        });
     }
 
-    private String normalizeContentType(String contentType) {
-        String trimmed = contentType == null ? "" : contentType.trim();
-        return trimmed.isBlank() ? "application/octet-stream" : trimmed;
+    private void deleteFilesAfterCommit(List<String> storedFileNames) {
+        if (storedFileNames.isEmpty()) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            throw new IllegalStateException("Attachment deletion requires an active transaction");
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                storedFileNames.forEach(RequestAttachmentService.this::deleteStoredFileAndEmptyParents);
+            }
+        });
+    }
+
+    private void deleteStoredFileAndEmptyParents(String storedFileName) {
+        Path path = resolveStoredFile(storedFileName);
+        deleteQuietly(path);
+
+        Path parent = path.getParent();
+        while (parent != null && !parent.equals(uploadRoot) && parent.startsWith(uploadRoot)) {
+            try {
+                Files.delete(parent);
+            } catch (DirectoryNotEmptyException exception) {
+                return;
+            } catch (IOException exception) {
+                return;
+            }
+            parent = parent.getParent();
+        }
+    }
+
+    private void deleteQuietly(Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException ignored) {
+            // The original storage or transaction failure remains the actionable error.
+        }
     }
 
     private RequestAttachment findAttachment(UUID id) {

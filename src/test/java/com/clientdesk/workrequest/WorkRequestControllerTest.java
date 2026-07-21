@@ -61,7 +61,7 @@ class WorkRequestControllerTest {
 
         mockMvc.perform(get("/api/work-requests"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].title", hasItem(title)));
+                .andExpect(jsonPath("$.content[*].title", hasItem(title)));
     }
 
     @Test
@@ -79,8 +79,8 @@ class WorkRequestControllerTest {
                         .param("priority", "URGENT")
                         .param("clientId", firstClientId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].title", hasItem(matchingTitle)))
-                .andExpect(jsonPath("$[*].title", not(hasItem(otherTitle))));
+                .andExpect(jsonPath("$.content[*].title", hasItem(matchingTitle)))
+                .andExpect(jsonPath("$.content[*].title", not(hasItem(otherTitle))));
     }
 
     @Test

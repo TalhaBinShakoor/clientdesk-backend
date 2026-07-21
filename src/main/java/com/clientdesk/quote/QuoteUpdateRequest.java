@@ -2,9 +2,11 @@ package com.clientdesk.quote;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -28,17 +30,20 @@ public record QuoteUpdateRequest(
 
         QuoteStatus status,
 
-        @Size(min = 3, max = 3)
+        @Pattern(regexp = "USD|EUR|GBP|SEK")
         String currency,
 
         @DecimalMin(value = "0.00")
+        @Digits(integer = 10, fraction = 2)
         BigDecimal taxAmount,
 
         LocalDate validUntil,
 
+        @Size(max = 10000)
         String notes,
 
         @NotEmpty
+        @Size(max = 50)
         List<@Valid QuoteLineItemRequest> lineItems
 ) {
 }

@@ -1,12 +1,15 @@
 package com.clientdesk.comment;
 
 import com.clientdesk.activity.ActivityEventService;
+import com.clientdesk.api.ApiPage;
 import com.clientdesk.projecttask.ProjectTask;
 import com.clientdesk.projecttask.ProjectTaskRepository;
 import com.clientdesk.security.AccessService;
 import com.clientdesk.workrequest.WorkRequest;
 import com.clientdesk.workrequest.WorkRequestRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -41,22 +44,19 @@ public class CommentService {
     }
 
     @Transactional(readOnly = true)
-    public List<CommentResponse> findAll(UUID workRequestId, UUID projectTaskId) {
+    public ApiPage<CommentResponse> findAll(UUID workRequestId, UUID projectTaskId, int page, int size) {
         validateSingleTarget(workRequestId, projectTaskId);
+        PageRequest pageRequest = PageRequest.of(page, size);
+        Page<Comment> comments;
 
         if (workRequestId != null) {
             findWorkRequest(workRequestId);
-            return commentRepository.findByWorkRequest_IdOrderByCreatedAtAsc(workRequestId)
-                    .stream()
-                    .map(CommentResponse::from)
-                    .toList();
+            comments = commentRepository.findByWorkRequest_IdOrderByCreatedAtAsc(workRequestId, pageRequest);
+        } else {
+            findProjectTask(projectTaskId);
+            comments = commentRepository.findByProjectTask_IdOrderByCreatedAtAsc(projectTaskId, pageRequest);
         }
-
-        findProjectTask(projectTaskId);
-        return commentRepository.findByProjectTask_IdOrderByCreatedAtAsc(projectTaskId)
-                .stream()
-                .map(CommentResponse::from)
-                .toList();
+        return ApiPage.from(comments, CommentResponse::from);
     }
 
     public CommentResponse create(CommentCreateRequest request) {

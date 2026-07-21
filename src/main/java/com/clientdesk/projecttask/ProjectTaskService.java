@@ -1,15 +1,17 @@
 package com.clientdesk.projecttask;
 
 import com.clientdesk.activity.ActivityEventService;
+import com.clientdesk.api.ApiPage;
 import com.clientdesk.security.AccessService;
 import com.clientdesk.workrequest.WorkRequest;
 import com.clientdesk.workrequest.WorkRequestRepository;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
@@ -36,15 +38,18 @@ public class ProjectTaskService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProjectTaskResponse> findAll(
+    public ApiPage<ProjectTaskResponse> findAll(
             ProjectTaskStatus status,
             String assignee,
-            UUID workRequestId
+            UUID workRequestId,
+            int page,
+            int size
     ) {
-        return projectTaskRepository.findAll(matchingFilters(status, assignee, workRequestId))
-                .stream()
-                .map(ProjectTaskResponse::from)
-                .toList();
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
+        return ApiPage.from(
+                projectTaskRepository.findAll(matchingFilters(status, assignee, workRequestId), pageRequest),
+                ProjectTaskResponse::from
+        );
     }
 
     @Transactional(readOnly = true)

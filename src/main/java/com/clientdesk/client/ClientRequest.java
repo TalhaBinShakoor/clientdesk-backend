@@ -21,6 +21,7 @@ public record ClientRequest(
 
         ClientStatus status,
 
+        @Size(max = 10000)
         String notes
 ) {
 }

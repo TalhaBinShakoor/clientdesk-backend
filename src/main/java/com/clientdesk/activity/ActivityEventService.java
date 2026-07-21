@@ -1,5 +1,6 @@
 package com.clientdesk.activity;
 
+import com.clientdesk.api.ApiPage;
 import com.clientdesk.attachment.RequestAttachment;
 import com.clientdesk.comment.Comment;
 import com.clientdesk.projecttask.ProjectTask;
@@ -9,10 +10,10 @@ import com.clientdesk.workrequest.WorkRequest;
 import com.clientdesk.workrequest.WorkRequestRepository;
 import com.clientdesk.workrequest.WorkRequestStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
@@ -36,13 +37,16 @@ public class ActivityEventService {
     }
 
     @Transactional(readOnly = true)
-    public List<ActivityEventResponse> findForWorkRequest(UUID workRequestId) {
+    public ApiPage<ActivityEventResponse> findForWorkRequest(UUID workRequestId, int page, int size) {
         findWorkRequest(workRequestId);
 
-        return activityEventRepository.findByWorkRequest_IdOrderByCreatedAtDesc(workRequestId)
-                .stream()
-                .map(ActivityEventResponse::from)
-                .toList();
+        return ApiPage.from(
+                activityEventRepository.findByWorkRequest_IdOrderByCreatedAtDesc(
+                        workRequestId,
+                        PageRequest.of(page, size)
+                ),
+                ActivityEventResponse::from
+        );
     }
 
     public void recordWorkRequestCreated(WorkRequest workRequest) {

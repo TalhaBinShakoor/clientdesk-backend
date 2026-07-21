@@ -46,6 +46,7 @@ public class Comment {
     private String authorName;
 
     @NotBlank
+    @Size(max = 5000)
     @Column(nullable = false, columnDefinition = "text")
     private String body;
 

@@ -54,6 +54,7 @@ public class Client {
     @Column(nullable = false, length = 30)
     private ClientStatus status = ClientStatus.ACTIVE;
 
+    @Size(max = 10000)
     @Column(columnDefinition = "text")
     private String notes;
 

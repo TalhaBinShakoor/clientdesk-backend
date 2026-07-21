@@ -60,22 +60,30 @@ Expected behavior:
 Required for deployment:
 
 ```text
+SPRING_PROFILES_ACTIVE=prod
 SPRING_DATASOURCE_URL=<production PostgreSQL JDBC URL>
-SPRING_DATASOURCE_USERNAME=<production database username>
-SPRING_DATASOURCE_PASSWORD=<production database password>
+SPRING_DATASOURCE_USERNAME=<least-privilege application database username>
+SPRING_DATASOURCE_PASSWORD=<application database password>
+SPRING_FLYWAY_USER=<database migration username>
+SPRING_FLYWAY_PASSWORD=<database migration password>
+FRONTEND_ORIGIN=https://<production frontend host>
+TRUSTED_PROXY_IP_PATTERN=<constrained hosting proxy IP regex>
+ATTACHMENT_STORAGE_ROOT=<private persistent storage path>
 AI_ENABLED=false
 OPENAI_API_KEY=
-AI_RATE_LIMIT_ENABLED=true
-AI_RATE_LIMIT_MAX_REQUESTS=20
-AI_RATE_LIMIT_WINDOW_SECONDS=60
 ```
 
-Optional AI tuning:
+Optional AI and rate-limit tuning:
 
 ```text
-AI_RATE_LIMIT_MAX_REQUESTS=20
-AI_RATE_LIMIT_WINDOW_SECONDS=60
+OPENAI_MODEL=gpt-5-nano
+AI_RATE_LIMIT_PER_USER=20
+AI_RATE_LIMIT_PER_ORGANIZATION=100
+API_RATE_LIMIT_WINDOW_SECONDS=60
+AUTH_RATE_LIMIT_WINDOW_SECONDS=900
 ```
+
+Keep rate limiting enabled. The complete environment, database, backup, attachment, monitoring, and restore checklist is in [PRODUCTION_OPERATIONS.md](./PRODUCTION_OPERATIONS.md). The reviewed security posture and remaining deployment gates are in [SECURITY_BASELINE.md](./SECURITY_BASELINE.md).
 
 ## OpenAI Budget And Usage Checklist
 
@@ -91,13 +99,16 @@ Before enabling real AI in production:
 - Rotate the API key if it was exposed or copied into an unsafe place.
 - Turn `AI_ENABLED=false` again when real AI is not needed.
 
-## Public Demo Checklist
+## Public Deployment Checklist
 
 Before sharing the public demo URL:
 
 - Confirm the backend health endpoint is available.
-- Confirm demo seed data is visible in the frontend.
+- Choose and document the Day 16 demo-access strategy; do not combine the known demo seed identities with the `prod` profile.
 - Confirm AI summary works with `AI_ENABLED=false`.
 - Confirm AI draft reply works with `AI_ENABLED=false`.
 - Confirm rate limiting is enabled.
 - Confirm no secret values are committed to Git.
+- Confirm a `prod` environment contains no known production-forbidden demo identities.
+- Confirm the frontend production build points to the deployed HTTPS API.
+- Confirm database and attachment backups have passed a restore test.

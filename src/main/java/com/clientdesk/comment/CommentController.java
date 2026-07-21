@@ -1,7 +1,10 @@
 package com.clientdesk.comment;
 
+import com.clientdesk.api.ApiPage;
 import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.CrossOrigin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -10,12 +13,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.http.HttpStatus.CREATED;
 
-@CrossOrigin(origins = "http://localhost:4200")
+@Validated
 @RestController
 @RequestMapping("/api/comments")
 public class CommentController {
@@ -27,11 +29,13 @@ public class CommentController {
     }
 
     @GetMapping
-    public List<CommentResponse> findAll(
+    public ApiPage<CommentResponse> findAll(
             @RequestParam(required = false) UUID workRequestId,
-            @RequestParam(required = false) UUID projectTaskId
+            @RequestParam(required = false) UUID projectTaskId,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "25") @Min(1) @Max(100) int size
     ) {
-        return commentService.findAll(workRequestId, projectTaskId);
+        return commentService.findAll(workRequestId, projectTaskId, page, size);
     }
 
     @PostMapping

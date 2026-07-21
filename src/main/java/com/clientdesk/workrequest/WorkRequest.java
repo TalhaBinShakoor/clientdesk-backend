@@ -43,6 +43,7 @@ public class WorkRequest {
     @Column(nullable = false, length = 200)
     private String title;
 
+    @Size(max = 10000)
     @Column(columnDefinition = "text")
     private String description;
 

@@ -1,7 +1,11 @@
 package com.clientdesk.projecttask;
 
+import com.clientdesk.api.ApiPage;
 import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.CrossOrigin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -14,13 +18,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.http.HttpStatus.CREATED;
 import static org.springframework.http.HttpStatus.NO_CONTENT;
 
-@CrossOrigin(origins = "http://localhost:4200")
+@Validated
 @RestController
 @RequestMapping("/api/project-tasks")
 public class ProjectTaskController {
@@ -32,12 +35,14 @@ public class ProjectTaskController {
     }
 
     @GetMapping
-    public List<ProjectTaskResponse> findAll(
+    public ApiPage<ProjectTaskResponse> findAll(
             @RequestParam(required = false) ProjectTaskStatus status,
-            @RequestParam(required = false) String assignee,
-            @RequestParam(required = false) UUID workRequestId
+            @RequestParam(required = false) @Size(max = 200) String assignee,
+            @RequestParam(required = false) UUID workRequestId,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "25") @Min(1) @Max(100) int size
     ) {
-        return projectTaskService.findAll(status, assignee, workRequestId);
+        return projectTaskService.findAll(status, assignee, workRequestId, page, size);
     }
 
     @GetMapping("/{id}")

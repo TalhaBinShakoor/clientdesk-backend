@@ -1,14 +1,17 @@
 package com.clientdesk.client;
 
+import com.clientdesk.api.ApiPage;
+import com.clientdesk.attachment.RequestAttachmentService;
 import com.clientdesk.identity.Organization;
 import com.clientdesk.identity.OrganizationRepository;
 import com.clientdesk.security.AccessService;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
@@ -19,24 +22,28 @@ public class ClientService {
 
     private final ClientRepository clientRepository;
     private final OrganizationRepository organizationRepository;
+    private final RequestAttachmentService requestAttachmentService;
     private final AccessService accessService;
 
     public ClientService(
             ClientRepository clientRepository,
             OrganizationRepository organizationRepository,
+            RequestAttachmentService requestAttachmentService,
             AccessService accessService
     ) {
         this.clientRepository = clientRepository;
         this.organizationRepository = organizationRepository;
+        this.requestAttachmentService = requestAttachmentService;
         this.accessService = accessService;
     }
 
     @Transactional(readOnly = true)
-    public List<ClientResponse> findAll() {
-        return clientRepository.findAll(accessService.scopeByClientPath())
-                .stream()
-                .map(ClientResponse::from)
-                .toList();
+    public ApiPage<ClientResponse> findAll(int page, int size) {
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
+        return ApiPage.from(
+                clientRepository.findAll(accessService.scopeByClientPath(), pageRequest),
+                ClientResponse::from
+        );
     }
 
     @Transactional(readOnly = true)
@@ -76,6 +83,7 @@ public class ClientService {
 
     public void delete(UUID id) {
         Client client = findClient(id);
+        requestAttachmentService.deleteFilesForClientAfterCommit(client.getId());
         clientRepository.delete(client);
     }
 

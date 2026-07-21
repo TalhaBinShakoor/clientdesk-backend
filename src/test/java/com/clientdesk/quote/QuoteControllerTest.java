@@ -87,7 +87,7 @@ class QuoteControllerTest {
 
         mockMvc.perform(get("/api/quotes"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].quoteNumber", hasItem(quoteNumber)));
+                .andExpect(jsonPath("$.content[*].quoteNumber", hasItem(quoteNumber)));
     }
 
     @Test
@@ -107,8 +107,8 @@ class QuoteControllerTest {
                         .param("clientId", firstClientId)
                         .param("workRequestId", firstWorkRequestId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].quoteNumber", hasItem(matchingQuoteNumber)))
-                .andExpect(jsonPath("$[*].quoteNumber", not(hasItem(otherQuoteNumber))));
+                .andExpect(jsonPath("$.content[*].quoteNumber", hasItem(matchingQuoteNumber)))
+                .andExpect(jsonPath("$.content[*].quoteNumber", not(hasItem(otherQuoteNumber))));
     }
 
     @Test

@@ -15,6 +15,7 @@ public record WorkRequestCreateRequest(
         @Size(max = 200)
         String title,
 
+        @Size(max = 10000)
         String description,
 
         WorkRequestStatus status,

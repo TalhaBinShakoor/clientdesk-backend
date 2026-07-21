@@ -45,8 +45,7 @@ class RequestAttachmentControllerTest {
         String responseBody = mockMvc.perform(multipart("/api/request-attachments")
                         .file(file)
                         .with(csrf())
-                        .param("workRequestId", workRequestId)
-                        .param("uploadedBy", "Payload Impostor"))
+                        .param("workRequestId", workRequestId))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.workRequestId").value(workRequestId))
                 .andExpect(jsonPath("$.originalFileName").value("brief.txt"))
@@ -60,19 +59,27 @@ class RequestAttachmentControllerTest {
 
         mockMvc.perform(get("/api/request-attachments").param("workRequestId", workRequestId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].id", hasItem(attachmentId)))
-                .andExpect(jsonPath("$[*].originalFileName", hasItem("brief.txt")));
+                .andExpect(jsonPath("$.content[*].id", hasItem(attachmentId)))
+                .andExpect(jsonPath("$.content[*].originalFileName", hasItem("brief.txt")));
 
         mockMvc.perform(get("/api/request-attachments/{id}/download", attachmentId))
                 .andExpect(status().isOk())
-                .andExpect(header().string("Content-Disposition", "attachment; filename*=UTF-8''brief.txt"))
+                .andExpect(header().string(
+                        "Content-Disposition",
+                        "attachment; filename=\"=?UTF-8?Q?brief.txt?=\"; filename*=UTF-8''brief.txt"
+                ))
+                .andExpect(header().string("Content-Length", "31"))
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(header().string("Content-Security-Policy", "sandbox; default-src 'none'"))
+                .andExpect(header().string("Cross-Origin-Resource-Policy", "same-origin"))
+                .andExpect(header().string("X-Download-Options", "noopen"))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN))
                 .andExpect(content().string("Please review the launch brief."));
 
         mockMvc.perform(get("/api/activity-events").param("workRequestId", workRequestId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].eventType", hasItem("FILE_UPLOADED")))
-                .andExpect(jsonPath("$[*].summary", hasItem("File uploaded: brief.txt")));
+                .andExpect(jsonPath("$.content[*].eventType", hasItem("FILE_UPLOADED")))
+                .andExpect(jsonPath("$.content[*].summary", hasItem("File uploaded: brief.txt")));
     }
 
     @Test

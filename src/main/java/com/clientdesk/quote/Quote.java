@@ -19,8 +19,10 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -61,12 +63,13 @@ public class Quote {
     private QuoteStatus status = QuoteStatus.DRAFT;
 
     @NotBlank
-    @Size(min = 3, max = 3)
+    @Pattern(regexp = "USD|EUR|GBP|SEK")
     @Column(nullable = false, length = 3)
     private String currency = "USD";
 
     @NotNull
     @DecimalMin(value = "0.00")
+    @Digits(integer = 10, fraction = 2)
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal subtotal = BigDecimal.ZERO;
 
@@ -83,6 +86,7 @@ public class Quote {
     @Column(name = "valid_until")
     private LocalDate validUntil;
 
+    @Size(max = 10000)
     @Column(columnDefinition = "text")
     private String notes;
 

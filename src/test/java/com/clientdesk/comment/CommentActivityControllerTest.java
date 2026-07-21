@@ -53,7 +53,7 @@ class CommentActivityControllerTest {
 
         mockMvc.perform(get("/api/comments").param("workRequestId", workRequestId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].body", hasItem(commentBody)));
+                .andExpect(jsonPath("$.content[*].body", hasItem(commentBody)));
     }
 
     @Test
@@ -81,7 +81,7 @@ class CommentActivityControllerTest {
 
         mockMvc.perform(get("/api/comments").param("projectTaskId", projectTaskId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].body", hasItem(commentBody)));
+                .andExpect(jsonPath("$.content[*].body", hasItem(commentBody)));
     }
 
     @Test
@@ -147,16 +147,16 @@ class CommentActivityControllerTest {
 
         mockMvc.perform(get("/api/activity-events").param("workRequestId", workRequestId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].eventType", hasItems(
+                .andExpect(jsonPath("$.content[*].eventType", hasItems(
                         "WORK_REQUEST_CREATED",
                         "PROJECT_TASK_CREATED",
                         "WORK_REQUEST_STATUS_CHANGED",
                         "PROJECT_TASK_STATUS_CHANGED",
                         "COMMENT_ADDED"
                 )))
-                .andExpect(jsonPath("$[*].workRequestId", hasItem(workRequestId)))
-                .andExpect(jsonPath("$[*].projectTaskId", hasItem(projectTaskId)))
-                .andExpect(jsonPath("$[*].summary", hasItem("Comment added")));
+                .andExpect(jsonPath("$.content[*].workRequestId", hasItem(workRequestId)))
+                .andExpect(jsonPath("$.content[*].projectTaskId", hasItem(projectTaskId)))
+                .andExpect(jsonPath("$.content[*].summary", hasItem("Comment added")));
     }
 
     private String createClient(String companyName) throws Exception {

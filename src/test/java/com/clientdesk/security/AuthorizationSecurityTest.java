@@ -78,9 +78,9 @@ class AuthorizationSecurityTest {
     void clientCanOnlyReadAssignedClientRecords() throws Exception {
         mockMvc.perform(get("/api/clients"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[*].id", hasItem(ACME_CLIENT_ID.toString())))
-                .andExpect(jsonPath("$[*].id", not(hasItem(NORTHSTAR_CLIENT_ID.toString()))));
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[*].id", hasItem(ACME_CLIENT_ID.toString())))
+                .andExpect(jsonPath("$.content[*].id", not(hasItem(NORTHSTAR_CLIENT_ID.toString()))));
 
         mockMvc.perform(get("/api/clients/{id}", ACME_CLIENT_ID))
                 .andExpect(status().isOk());
@@ -130,7 +130,7 @@ class AuthorizationSecurityTest {
 
         mockMvc.perform(get("/api/activity-events").param("workRequestId", requestId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].actorName", hasItem("Maya Chen")));
+                .andExpect(jsonPath("$.content[*].actorName", hasItem("Maya Chen")));
     }
 
     @Test
@@ -169,6 +169,6 @@ class AuthorizationSecurityTest {
 
         mockMvc.perform(get("/api/clients"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].id", not(hasItem(otherClient.getId().toString()))));
+                .andExpect(jsonPath("$.content[*].id", not(hasItem(otherClient.getId().toString()))));
     }
 }

@@ -1,15 +1,18 @@
 package com.clientdesk.workrequest;
 
 import com.clientdesk.activity.ActivityEventService;
+import com.clientdesk.api.ApiPage;
+import com.clientdesk.attachment.RequestAttachmentService;
 import com.clientdesk.client.Client;
 import com.clientdesk.client.ClientRepository;
 import com.clientdesk.security.AccessService;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
@@ -21,30 +24,36 @@ public class WorkRequestService {
     private final WorkRequestRepository workRequestRepository;
     private final ClientRepository clientRepository;
     private final ActivityEventService activityEventService;
+    private final RequestAttachmentService requestAttachmentService;
     private final AccessService accessService;
 
     public WorkRequestService(
             WorkRequestRepository workRequestRepository,
             ClientRepository clientRepository,
             ActivityEventService activityEventService,
+            RequestAttachmentService requestAttachmentService,
             AccessService accessService
     ) {
         this.workRequestRepository = workRequestRepository;
         this.clientRepository = clientRepository;
         this.activityEventService = activityEventService;
+        this.requestAttachmentService = requestAttachmentService;
         this.accessService = accessService;
     }
 
     @Transactional(readOnly = true)
-    public List<WorkRequestResponse> findAll(
+    public ApiPage<WorkRequestResponse> findAll(
             WorkRequestStatus status,
             WorkRequestPriority priority,
-            UUID clientId
+            UUID clientId,
+            int page,
+            int size
     ) {
-        return workRequestRepository.findAll(matchingFilters(status, priority, clientId))
-                .stream()
-                .map(WorkRequestResponse::from)
-                .toList();
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
+        return ApiPage.from(
+                workRequestRepository.findAll(matchingFilters(status, priority, clientId), pageRequest),
+                WorkRequestResponse::from
+        );
     }
 
     @Transactional(readOnly = true)
@@ -108,6 +117,7 @@ public class WorkRequestService {
 
     public void delete(UUID id) {
         WorkRequest workRequest = findWorkRequest(id);
+        requestAttachmentService.deleteFilesForWorkRequestAfterCommit(workRequest.getId());
         workRequestRepository.delete(workRequest);
     }
 

@@ -1,11 +1,14 @@
 package com.clientdesk.quote;
 
+import com.clientdesk.api.ApiPage;
 import com.clientdesk.client.Client;
 import com.clientdesk.client.ClientRepository;
 import com.clientdesk.security.AccessService;
 import com.clientdesk.workrequest.WorkRequest;
 import com.clientdesk.workrequest.WorkRequestRepository;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -24,6 +27,7 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 public class QuoteService {
 
     private static final int MONEY_SCALE = 2;
+    private static final BigDecimal MAX_MONEY_VALUE = new BigDecimal("9999999999.99");
 
     private final QuoteRepository quoteRepository;
     private final ClientRepository clientRepository;
@@ -43,11 +47,18 @@ public class QuoteService {
     }
 
     @Transactional(readOnly = true)
-    public List<QuoteResponse> findAll(QuoteStatus status, UUID clientId, UUID workRequestId) {
-        return quoteRepository.findAll(matchingFilters(status, clientId, workRequestId))
-                .stream()
-                .map(QuoteResponse::from)
-                .toList();
+    public ApiPage<QuoteResponse> findAll(
+            QuoteStatus status,
+            UUID clientId,
+            UUID workRequestId,
+            int page,
+            int size
+    ) {
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
+        return ApiPage.from(
+                quoteRepository.findAll(matchingFilters(status, clientId, workRequestId), pageRequest),
+                QuoteResponse::from
+        );
     }
 
     @Transactional(readOnly = true)
@@ -129,6 +140,9 @@ public class QuoteService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(MONEY_SCALE, RoundingMode.HALF_UP);
         BigDecimal taxAmount = scaledMoney(quote.getTaxAmount());
+        requireMoneyRange(subtotal);
+        requireMoneyRange(taxAmount);
+        requireMoneyRange(subtotal.add(taxAmount));
 
         quote.setSubtotal(subtotal);
         quote.setTaxAmount(taxAmount);
@@ -139,6 +153,7 @@ public class QuoteService {
         BigDecimal quantity = scaledQuantity(request.quantity());
         BigDecimal unitPrice = scaledMoney(request.unitPrice());
         BigDecimal lineTotal = quantity.multiply(unitPrice).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+        requireMoneyRange(lineTotal);
 
         return new QuoteLineItem(
                 request.description(),
@@ -155,6 +170,12 @@ public class QuoteService {
 
     private BigDecimal scaledMoney(BigDecimal value) {
         return (value == null ? BigDecimal.ZERO : value).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+    }
+
+    private void requireMoneyRange(BigDecimal value) {
+        if (value.compareTo(MAX_MONEY_VALUE) > 0) {
+            throw new ResponseStatusException(BAD_REQUEST, "Quote amount exceeds the supported range");
+        }
     }
 
     private Client findClient(UUID id) {

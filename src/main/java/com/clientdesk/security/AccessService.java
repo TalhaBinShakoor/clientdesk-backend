@@ -20,9 +20,11 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 public class AccessService {
 
     private final AppUserRepository appUserRepository;
+    private final SecurityAuditLogger securityAuditLogger;
 
-    public AccessService(AppUserRepository appUserRepository) {
+    public AccessService(AppUserRepository appUserRepository, SecurityAuditLogger securityAuditLogger) {
         this.appUserRepository = appUserRepository;
+        this.securityAuditLogger = securityAuditLogger;
     }
 
     public AuthenticatedUser currentUser() {
@@ -57,6 +59,7 @@ public class AccessService {
                 || client.getId().equals(user.getClientId());
 
         if (!sameOrganization || !permittedClient) {
+            securityAuditLogger.objectAuthorizationDenied(user, resourceName, client.getId());
             throw new ResponseStatusException(NOT_FOUND, resourceName + " not found");
         }
     }

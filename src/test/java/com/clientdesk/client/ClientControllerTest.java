@@ -54,7 +54,19 @@ class ClientControllerTest {
 
         mockMvc.perform(get("/api/clients"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].companyName", hasItem(companyName)));
+                .andExpect(jsonPath("$.content[*].companyName", hasItem(companyName)));
+    }
+
+    @Test
+    void listClientsEnforcesPaginationLimits() throws Exception {
+        mockMvc.perform(get("/api/clients").param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(1))
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.totalElements").isNumber());
+
+        mockMvc.perform(get("/api/clients").param("size", "101"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
