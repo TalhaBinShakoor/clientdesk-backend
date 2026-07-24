@@ -36,7 +36,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      SPRING_PROFILES_ACTIVE: test
+      SPRING_PROFILES_ACTIVE: test,demo
       SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/clientdesk
       SPRING_DATASOURCE_USERNAME: clientdesk
       SPRING_DATASOURCE_PASSWORD: clientdesk
@@ -54,7 +54,7 @@ jobs:
 
   dependency-review:
     name: Dependency review
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.repository.private == false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -83,6 +83,7 @@ jobs:
 
   codeql:
     name: CodeQL
+    if: github.event.repository.private == false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
