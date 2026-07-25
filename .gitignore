@@ -5,6 +5,11 @@ uploads/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+# Local deployment secrets
+.env
+.env.*
+!.env.example
+
 ### STS ###
 .apt_generated
 .classpath

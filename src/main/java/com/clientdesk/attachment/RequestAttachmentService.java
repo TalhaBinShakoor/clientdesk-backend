@@ -8,7 +8,6 @@ import com.clientdesk.workrequest.WorkRequest;
 import com.clientdesk.workrequest.WorkRequestRepository;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.core.io.UrlResource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,16 +17,11 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.nio.file.DirectoryNotEmptyException;
+import java.io.FileNotFoundException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.UUID;
 
-import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.CONFLICT;
 import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
@@ -44,7 +38,7 @@ public class RequestAttachmentService {
     private final AccessService accessService;
     private final AttachmentProperties properties;
     private final AttachmentFileValidator fileValidator;
-    private final Path uploadRoot;
+    private final AttachmentStorage attachmentStorage;
 
     public RequestAttachmentService(
             RequestAttachmentRepository requestAttachmentRepository,
@@ -53,7 +47,8 @@ public class RequestAttachmentService {
             ActivityEventService activityEventService,
             AccessService accessService,
             AttachmentProperties properties,
-            AttachmentFileValidator fileValidator
+            AttachmentFileValidator fileValidator,
+            AttachmentStorage attachmentStorage
     ) {
         this.requestAttachmentRepository = requestAttachmentRepository;
         this.workRequestRepository = workRequestRepository;
@@ -62,7 +57,7 @@ public class RequestAttachmentService {
         this.accessService = accessService;
         this.properties = properties;
         this.fileValidator = fileValidator;
-        this.uploadRoot = properties.getStorageRoot().toAbsolutePath().normalize();
+        this.attachmentStorage = attachmentStorage;
     }
 
     @Transactional(readOnly = true)
@@ -96,13 +91,11 @@ public class RequestAttachmentService {
 
         String storedFileName = organizationId + "/" + workRequestId + "/"
                 + UUID.randomUUID() + validatedFile.extension();
-        Path destination = resolveStoredFile(storedFileName);
         try {
-            Files.createDirectories(destination.getParent());
-            Files.write(destination, validatedFile.content(), StandardOpenOption.CREATE_NEW);
-            deleteFileAfterRollback(destination);
+            attachmentStorage.store(storedFileName, validatedFile.content());
+            deleteFileAfterRollback(storedFileName);
         } catch (IOException exception) {
-            deleteQuietly(destination);
+            deleteQuietly(storedFileName);
             throw new ResponseStatusException(INTERNAL_SERVER_ERROR, "File could not be stored", exception);
         }
 
@@ -125,17 +118,13 @@ public class RequestAttachmentService {
     @Transactional(readOnly = true)
     public RequestAttachmentDownload loadDownload(UUID id) {
         RequestAttachment attachment = findAttachment(id);
-        Path filePath = resolveStoredFile(attachment.getStoredFileName());
 
         try {
-            Resource resource = new UrlResource(filePath.toUri());
-
-            if (!resource.exists() || !resource.isReadable()) {
-                throw new ResponseStatusException(NOT_FOUND, "Attachment file not found");
-            }
-
+            Resource resource = attachmentStorage.load(attachment.getStoredFileName());
             return new RequestAttachmentDownload(attachment, resource);
-        } catch (MalformedURLException exception) {
+        } catch (FileNotFoundException exception) {
+            throw new ResponseStatusException(NOT_FOUND, "Attachment file not found");
+        } catch (IOException exception) {
             throw new ResponseStatusException(INTERNAL_SERVER_ERROR, "Attachment file could not be loaded", exception);
         }
     }
@@ -159,15 +148,7 @@ public class RequestAttachmentService {
         );
     }
 
-    private Path resolveStoredFile(String storedFileName) {
-        Path resolved = uploadRoot.resolve(storedFileName).normalize();
-        if (!resolved.startsWith(uploadRoot)) {
-            throw new ResponseStatusException(BAD_REQUEST, "Invalid file path");
-        }
-        return resolved;
-    }
-
-    private void deleteFileAfterRollback(Path path) {
+    private void deleteFileAfterRollback(String storedFileName) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             return;
         }
@@ -175,7 +156,7 @@ public class RequestAttachmentService {
             @Override
             public void afterCompletion(int status) {
                 if (status != STATUS_COMMITTED) {
-                    deleteQuietly(path);
+                    deleteQuietly(storedFileName);
                 }
             }
         });
@@ -191,31 +172,14 @@ public class RequestAttachmentService {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                storedFileNames.forEach(RequestAttachmentService.this::deleteStoredFileAndEmptyParents);
+                storedFileNames.forEach(RequestAttachmentService.this::deleteQuietly);
             }
         });
     }
 
-    private void deleteStoredFileAndEmptyParents(String storedFileName) {
-        Path path = resolveStoredFile(storedFileName);
-        deleteQuietly(path);
-
-        Path parent = path.getParent();
-        while (parent != null && !parent.equals(uploadRoot) && parent.startsWith(uploadRoot)) {
-            try {
-                Files.delete(parent);
-            } catch (DirectoryNotEmptyException exception) {
-                return;
-            } catch (IOException exception) {
-                return;
-            }
-            parent = parent.getParent();
-        }
-    }
-
-    private void deleteQuietly(Path path) {
+    private void deleteQuietly(String storedFileName) {
         try {
-            Files.deleteIfExists(path);
+            attachmentStorage.delete(storedFileName);
         } catch (IOException ignored) {
             // The original storage or transaction failure remains the actionable error.
         }

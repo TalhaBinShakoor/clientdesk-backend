@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -15,6 +16,9 @@ import java.util.Set;
 @Validated
 @ConfigurationProperties(prefix = "clientdesk.attachments")
 public class AttachmentProperties {
+
+    @NotEmpty
+    private String storageProvider = "local";
 
     @NotNull
     private Path storageRoot = Path.of("uploads", "request-attachments");
@@ -36,6 +40,17 @@ public class AttachmentProperties {
             "text/plain",
             "text/csv"
     ));
+
+    @NotNull
+    private Cloudinary cloudinary = new Cloudinary();
+
+    public String getStorageProvider() {
+        return storageProvider;
+    }
+
+    public void setStorageProvider(String storageProvider) {
+        this.storageProvider = storageProvider;
+    }
 
     public Path getStorageRoot() {
         return storageRoot;
@@ -75,5 +90,66 @@ public class AttachmentProperties {
 
     public void setAllowedContentTypes(Set<String> allowedContentTypes) {
         this.allowedContentTypes = allowedContentTypes;
+    }
+
+    public Cloudinary getCloudinary() {
+        return cloudinary;
+    }
+
+    public void setCloudinary(Cloudinary cloudinary) {
+        this.cloudinary = cloudinary;
+    }
+
+    public static class Cloudinary {
+
+        private String cloudName = "";
+        private String apiKey = "";
+        private String apiSecret = "";
+
+        @NotEmpty
+        private String folderPrefix = "clientdesk/attachments";
+
+        @NotNull
+        private Duration downloadTimeout = Duration.ofSeconds(10);
+
+        public String getCloudName() {
+            return cloudName;
+        }
+
+        public void setCloudName(String cloudName) {
+            this.cloudName = cloudName;
+        }
+
+        public String getApiKey() {
+            return apiKey;
+        }
+
+        public void setApiKey(String apiKey) {
+            this.apiKey = apiKey;
+        }
+
+        public String getApiSecret() {
+            return apiSecret;
+        }
+
+        public void setApiSecret(String apiSecret) {
+            this.apiSecret = apiSecret;
+        }
+
+        public String getFolderPrefix() {
+            return folderPrefix;
+        }
+
+        public void setFolderPrefix(String folderPrefix) {
+            this.folderPrefix = folderPrefix;
+        }
+
+        public Duration getDownloadTimeout() {
+            return downloadTimeout;
+        }
+
+        public void setDownloadTimeout(Duration downloadTimeout) {
+            this.downloadTimeout = downloadTimeout;
+        }
     }
 }

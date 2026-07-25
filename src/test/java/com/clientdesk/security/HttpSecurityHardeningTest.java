@@ -36,6 +36,16 @@ class HttpSecurityHardeningTest {
     private Environment environment;
 
     @Test
+    void healthEndpointIsPublicButOtherActuatorEndpointsRemainDenied() throws Exception {
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
+
+        mockMvc.perform(get("/actuator/info"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void csrfEndpointIssuesHardenedBrowserReadableCookie() throws Exception {
         mockMvc.perform(get("/api/auth/csrf").secure(true))
                 .andExpect(status().isOk())

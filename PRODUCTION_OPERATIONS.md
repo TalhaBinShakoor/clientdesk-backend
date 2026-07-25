@@ -15,7 +15,11 @@ SPRING_FLYWAY_USER=<migration role>
 SPRING_FLYWAY_PASSWORD=<migration role password>
 FRONTEND_ORIGIN=https://<exact frontend host>
 TRUSTED_PROXY_IP_PATTERN=<constrained platform proxy IP regex>
-ATTACHMENT_STORAGE_ROOT=<private persistent storage path>
+ATTACHMENT_STORAGE_PROVIDER=cloudinary
+CLOUDINARY_CLOUD_NAME=<production Cloudinary cloud name>
+CLOUDINARY_API_KEY=<dedicated production API key>
+CLOUDINARY_API_SECRET=<dedicated production API secret>
+CLOUDINARY_FOLDER_PREFIX=clientdesk/production/attachments
 AI_ENABLED=false
 OPENAI_API_KEY=
 ```
@@ -28,7 +32,7 @@ Before release:
 - Confirm the backend is reachable only through the HTTPS proxy.
 - Confirm `FRONTEND_ORIGIN` is one exact HTTPS origin without a path or wildcard.
 - Copy the proxy provider's documented internal address range into `TRUSTED_PROXY_IP_PATTERN`; do not use `.*`.
-- Keep the database and attachment storage private and inaccessible from the public internet.
+- Keep the database private and use authenticated Cloudinary delivery so attachment bytes are never public.
 - Start with `AI_ENABLED=false`. Add a dedicated production OpenAI key only when paid AI is intentionally enabled.
 - Confirm production does not contain the known demo users, organization, or default password.
 
@@ -62,14 +66,15 @@ The migration role must own, or be authorized to alter, objects managed by Flywa
 
 ## Backup Policy
 
-Back up both PostgreSQL and the attachment storage. Database-only backups are incomplete because attachment metadata is stored in PostgreSQL while file bytes are stored under `ATTACHMENT_STORAGE_ROOT`.
+Protect both PostgreSQL and Cloudinary assets. Database-only backups are incomplete because attachment metadata is stored in PostgreSQL while file bytes are stored as authenticated Cloudinary raw assets.
 
 - Enable encrypted automatic database backups with the selected provider.
 - Set a documented recovery point objective and recovery time objective before launch.
 - Retain at least one backup outside the live database failure domain when the provider supports it.
 - Encrypt backups at rest and in transit, and restrict restore/download access.
-- Back up private attachment storage on the same schedule.
-- Coordinate database and attachment snapshots by pausing attachment writes or using a provider-supported consistent snapshot process.
+- Record a Cloudinary asset inventory for `CLOUDINARY_FOLDER_PREFIX`, including public ID, byte size, and creation time, without recording API credentials or signed delivery URLs.
+- Use Cloudinary backup/versioning features when the selected plan supports them. Otherwise, document the free-tier recovery limitation and retain controlled source copies for portfolio-demo assets.
+- Coordinate database backups and Cloudinary asset inventories by pausing attachment writes during the capture window.
 - Record backup time, retention expiry, encryption status, and restore-test result without recording credentials.
 - Never place production dumps in either Git repository or a public storage bucket.
 
@@ -81,11 +86,11 @@ Test restoration into an isolated, non-production database before launch and at 
 
 1. Create an empty recovery database with no public access.
 2. Restore the latest database backup with `pg_restore --clean --if-exists --no-owner --no-acl`.
-3. Restore the matching attachment snapshot to a private temporary storage root.
+3. Point an isolated recovery configuration at a separate private Cloudinary folder or verified recovery copy; never overwrite production assets.
 4. Start the tested backend revision with the restored resources and `AI_ENABLED=false`.
 5. Confirm Flyway validation succeeds and no unexpected migration runs.
 6. Verify login, organization isolation, request access, attachment download, and quote totals.
-7. Compare database attachment metadata with stored files and investigate missing or orphaned files.
+7. Compare database attachment metadata with the Cloudinary inventory and investigate missing or orphaned public IDs.
 8. Destroy the temporary environment and securely remove restored secrets and data.
 9. Record duration and outcome. A backup is not considered usable until this test passes.
 
@@ -96,7 +101,7 @@ Test restoration into an isolated, non-production database before launch and at 
 - Alert on repeated `auth_login_rate_limited`, `authorization_denied`, `api_rate_limited`, and `api_failure` events.
 - Keep logs encrypted, access-controlled, and retained only as long as operationally required.
 - Verify rate limiting at the deployed instance count. The current limiter is in-memory and applies per backend instance.
-- Monitor attachment storage against both platform capacity and application quotas.
+- Monitor Cloudinary credit/storage/bandwidth usage alongside application attachment quotas.
 - Monitor OpenAI usage and budget whenever real AI is enabled.
 
 ## Secret Rotation

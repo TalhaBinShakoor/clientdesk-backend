@@ -68,7 +68,11 @@ SPRING_FLYWAY_USER=<database migration username>
 SPRING_FLYWAY_PASSWORD=<database migration password>
 FRONTEND_ORIGIN=https://<production frontend host>
 TRUSTED_PROXY_IP_PATTERN=<constrained hosting proxy IP regex>
-ATTACHMENT_STORAGE_ROOT=<private persistent storage path>
+ATTACHMENT_STORAGE_PROVIDER=cloudinary
+CLOUDINARY_CLOUD_NAME=<production Cloudinary cloud name>
+CLOUDINARY_API_KEY=<dedicated production API key>
+CLOUDINARY_API_SECRET=<dedicated production API secret>
+CLOUDINARY_FOLDER_PREFIX=clientdesk/production/attachments
 AI_ENABLED=false
 OPENAI_API_KEY=
 ```
@@ -111,4 +115,4 @@ Before sharing the public demo URL:
 - Confirm no secret values are committed to Git.
 - Confirm a `prod` environment contains no known production-forbidden demo identities.
 - Confirm the frontend production build points to the deployed HTTPS API.
-- Confirm database and attachment backups have passed a restore test.
+- Confirm the database restore and Cloudinary attachment inventory/recovery checks have passed.

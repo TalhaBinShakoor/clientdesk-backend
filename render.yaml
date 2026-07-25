@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: clientdesk-backend
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: checksPass
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: AI_ENABLED
+        value: "false"
+      - key: ATTACHMENT_STORAGE_PROVIDER
+        value: cloudinary
+      - key: CLOUDINARY_FOLDER_PREFIX
+        value: clientdesk/production/attachments
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      - key: SPRING_FLYWAY_USER
+        sync: false
+      - key: SPRING_FLYWAY_PASSWORD
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: TRUSTED_PROXY_IP_PATTERN
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
