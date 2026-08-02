@@ -104,12 +104,15 @@ class AuthorizationSecurityTest {
                                 {
                                   "clientId": "%s",
                                   "title": "%s",
+                                  "status": "CLOSED",
                                   "priority": "HIGH",
                                   "requestedBy": "Payload Impostor"
                                 }
                                 """.formatted(ACME_CLIENT_ID, title)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.requestedBy").value("Maya Chen"))
+                .andExpect(jsonPath("$.status").value("NEW"))
+                .andExpect(jsonPath("$.priority").value("HIGH"))
                 .andReturn();
 
         String requestId = result.getResponse().getContentAsString()

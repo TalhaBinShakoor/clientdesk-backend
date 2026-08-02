@@ -123,7 +123,7 @@ public class AiAssistantService {
                 </request_context>
                 """.formatted(buildRequestContext(workRequest, comments));
 
-        return new AiAssistantResponse(generateWithOpenAi(prompt, fallbackSummary));
+        return generateWithOpenAi(prompt, fallbackSummary);
     }
 
     public AiAssistantResponse draftClientReply(UUID workRequestId, DraftClientReplyRequest request) {
@@ -150,7 +150,7 @@ public class AiAssistantService {
                 </request_context>
                 """.formatted(tone, buildRequestContext(workRequest, comments));
 
-        return new AiAssistantResponse(generateWithOpenAi(prompt, fallbackDraft));
+        return generateWithOpenAi(prompt, fallbackDraft);
     }
 
     private String buildLocalSummary(WorkRequest workRequest, List<Comment> comments) {
@@ -217,9 +217,9 @@ public class AiAssistantService {
         return workRequest;
     }
 
-    private String generateWithOpenAi(String prompt, String fallbackContent) {
+    private AiAssistantResponse generateWithOpenAi(String prompt, String fallbackContent) {
         if (!aiEnabled || openAiApiKey == null || openAiApiKey.isBlank()) {
-            return truncate(fallbackContent, maxOutputCharacters);
+            return localFallbackResponse(fallbackContent);
         }
 
         try {
@@ -259,13 +259,24 @@ public class AiAssistantService {
                     });
 
             String generatedContent = extractGeneratedContent(response);
-            return truncate(
-                    generatedContent.isBlank() ? fallbackContent : generatedContent,
-                    maxOutputCharacters
+            if (generatedContent.isBlank()) {
+                return localFallbackResponse(fallbackContent);
+            }
+
+            return new AiAssistantResponse(
+                    truncate(generatedContent, maxOutputCharacters),
+                    AiAssistantSource.OPENAI
             );
         } catch (RestClientException exception) {
-            return truncate(fallbackContent, maxOutputCharacters);
+            return localFallbackResponse(fallbackContent);
         }
+    }
+
+    private AiAssistantResponse localFallbackResponse(String fallbackContent) {
+        return new AiAssistantResponse(
+                truncate(fallbackContent, maxOutputCharacters),
+                AiAssistantSource.LOCAL_FALLBACK
+        );
     }
 
     private List<Comment> loadContextComments(UUID workRequestId) {

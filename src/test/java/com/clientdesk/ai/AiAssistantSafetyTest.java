@@ -68,6 +68,7 @@ class AiAssistantSafetyTest {
         assertThat(outboundRequest.path("input").asText()).contains("untrusted data");
         assertThat(outboundRequest.path("input").asText()).hasSizeLessThan(1000);
         assertThat(response.content()).isEqualTo("1234567890");
+        assertThat(response.source()).isEqualTo(AiAssistantSource.OPENAI);
         verify(fixture.commentRepository()).findByWorkRequest_IdOrderByCreatedAtDesc(
                 eq(fixture.workRequestId()),
                 any(Pageable.class)
@@ -83,6 +84,7 @@ class AiAssistantSafetyTest {
         AiAssistantResponse response = fixture.service().summarizeRequestThread(fixture.workRequestId());
 
         assertThat(response.content()).startsWith("Request summary");
+        assertThat(response.source()).isEqualTo(AiAssistantSource.LOCAL_FALLBACK);
         verify(fixture.workRequestRepository(), never()).save(any());
     }
 

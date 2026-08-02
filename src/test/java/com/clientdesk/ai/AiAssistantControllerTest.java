@@ -41,7 +41,8 @@ class AiAssistantControllerTest {
                 .andExpect(jsonPath("$.content", containsString("Request summary")))
                 .andExpect(jsonPath("$.content", containsString(workRequestTitle)))
                 .andExpect(jsonPath("$.content", containsString("Please confirm the launch copy direction.")))
-                .andExpect(jsonPath("$.content", containsString("Recommended next step")));
+                .andExpect(jsonPath("$.content", containsString("Recommended next step")))
+                .andExpect(jsonPath("$.source").value("LOCAL_FALLBACK"));
     }
 
     @Test
@@ -64,7 +65,8 @@ class AiAssistantControllerTest {
                 .andExpect(jsonPath("$.content", containsString("Hi Alex Morgan")))
                 .andExpect(jsonPath("$.content", containsString(workRequestTitle)))
                 .andExpect(jsonPath("$.content", containsString("Can you send the next client update?")))
-                .andExpect(jsonPath("$.content", containsString("Next, I will")));
+                .andExpect(jsonPath("$.content", containsString("Next, I will")))
+                .andExpect(jsonPath("$.source").value("LOCAL_FALLBACK"));
     }
 
     @Test

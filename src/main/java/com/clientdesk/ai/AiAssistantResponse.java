@@ -1,6 +1,7 @@
 package com.clientdesk.ai;
 
 public record AiAssistantResponse(
-        String content
+        String content,
+        AiAssistantSource source
 ) {
 }

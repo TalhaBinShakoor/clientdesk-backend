@@ -5,6 +5,7 @@ import com.clientdesk.api.ApiPage;
 import com.clientdesk.attachment.RequestAttachmentService;
 import com.clientdesk.client.Client;
 import com.clientdesk.client.ClientRepository;
+import com.clientdesk.identity.MembershipRole;
 import com.clientdesk.security.AccessService;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.domain.PageRequest;
@@ -63,12 +64,15 @@ public class WorkRequestService {
 
     public WorkRequestResponse create(WorkRequestCreateRequest request) {
         Client client = findClient(request.clientId());
+        WorkRequestStatus initialStatus = accessService.currentUser().getRole() == MembershipRole.CLIENT
+                ? WorkRequestStatus.NEW
+                : request.status();
         WorkRequest workRequest = new WorkRequest(
                 client,
                 accessService.currentAppUser(),
                 request.title(),
                 request.description(),
-                request.status(),
+                initialStatus,
                 request.priority(),
                 accessService.displayName(),
                 request.dueDate()
