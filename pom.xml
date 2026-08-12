@@ -11,9 +11,9 @@
 	<groupId>com.clientdesk</groupId>
 	<artifactId>clientdesk-backend</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
-	<url/>
+	<name>ClientDesk Backend</name>
+	<description>Secure, role-aware API for the ClientDesk client operations workspace</description>
+	<url>https://github.com/TalhaBinShakoor/clientdesk-backend</url>
 	<licenses>
 		<license/>
 	</licenses>

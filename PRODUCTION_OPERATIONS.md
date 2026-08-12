@@ -1,53 +1,92 @@
-# Production Operations
+# ClientDesk Production Operations
 
-This runbook is the release gate for a production ClientDesk environment. Provider-specific values belong in the hosting platform's secret manager, never in Git, workflow files, build output, or frontend code.
+Review date: 2026-08-12
+
+This runbook covers the deployed ClientDesk portfolio environment. It separates current architecture and routine checks from operational assurance work that cannot be proven by source code alone.
+
+## Service Inventory
+
+| Component | Provider | Production responsibility |
+| --- | --- | --- |
+| Frontend | Vercel | Angular application, browser-security headers, SPA fallback, and same-origin `/api/*` rewrite |
+| Backend | Render free web service | Spring Boot API and health endpoint |
+| Database | Neon PostgreSQL 16 | Application data and Flyway schema history |
+| Attachments | Cloudinary | Authenticated raw attachment assets |
+| CI and security | GitHub Actions | Tests, builds, dependency checks, secret scanning, and CodeQL |
+
+Stable public frontend:
+
+```text
+https://clientdesk-omega.vercel.app
+```
+
+Health endpoint:
+
+```text
+https://clientdesk-backend.onrender.com/actuator/health
+```
+
+Render cold starts are expected after inactivity. Treat the first slow request as an infrastructure characteristic unless health checks or subsequent requests fail.
 
 ## Environment Baseline
 
-Set and verify these values before starting the backend:
+The backend runs with the `prod` profile and environment-managed configuration:
 
 ```text
 SPRING_PROFILES_ACTIVE=prod
-SPRING_DATASOURCE_URL=<private PostgreSQL JDBC URL with TLS enabled>
+SPRING_DATASOURCE_URL=<Neon PostgreSQL JDBC URL with TLS>
 SPRING_DATASOURCE_USERNAME=<least-privilege application role>
-SPRING_DATASOURCE_PASSWORD=<application role password>
+SPRING_DATASOURCE_PASSWORD=<secret>
 SPRING_FLYWAY_USER=<migration role>
-SPRING_FLYWAY_PASSWORD=<migration role password>
-FRONTEND_ORIGIN=https://<exact frontend host>
-TRUSTED_PROXY_IP_PATTERN=<constrained platform proxy IP regex>
+SPRING_FLYWAY_PASSWORD=<secret>
+FRONTEND_ORIGIN=https://clientdesk-omega.vercel.app
+TRUSTED_PROXY_IP_PATTERN=<constrained Render proxy pattern>
 ATTACHMENT_STORAGE_PROVIDER=cloudinary
-CLOUDINARY_CLOUD_NAME=<production Cloudinary cloud name>
-CLOUDINARY_API_KEY=<dedicated production API key>
-CLOUDINARY_API_SECRET=<dedicated production API secret>
+CLOUDINARY_CLOUD_NAME=<secret-managed Cloudinary cloud name>
+CLOUDINARY_API_KEY=<secret>
+CLOUDINARY_API_SECRET=<secret>
 CLOUDINARY_FOLDER_PREFIX=clientdesk/production/attachments
 AI_ENABLED=false
-OPENAI_API_KEY=
+OPENAI_API_KEY=<unset or blank>
 ```
 
-Keep the default secure session, request-size, upload-quota, authentication-rate-limit, API-rate-limit, and safe-error settings unless an intentional reviewed override is required. Never activate the `demo` profile together with `prod`; production startup rejects known demo identities and data.
+The production startup guard fails closed when database credentials are blank, the frontend origin is not an exact HTTPS origin, secure cookies are disabled, session timeout exceeds 30 minutes, proxy trust is unconstrained, or paid AI is enabled without safe provider configuration.
 
-Before release:
+Never combine the repeatable development `demo` seed with the normal production environment.
 
-- Confirm the frontend uses the deployed HTTPS API URL rather than `localhost`.
-- Confirm the backend is reachable only through the HTTPS proxy.
-- Confirm `FRONTEND_ORIGIN` is one exact HTTPS origin without a path or wildcard.
-- Copy the proxy provider's documented internal address range into `TRUSTED_PROXY_IP_PATTERN`; do not use `.*`.
-- Keep the database private and use authenticated Cloudinary delivery so attachment bytes are never public.
-- Start with `AI_ENABLED=false`. Add a dedicated production OpenAI key only when paid AI is intentionally enabled.
-- Confirm production does not contain the known demo users, organization, or default password.
+## Routine Health Checks
 
-## Database Roles
+### Before a Portfolio Demonstration
 
-Use separate credentials for schema migration and normal application traffic:
+1. Open the stable Vercel frontend.
+2. If the backend is waking, wait for the health endpoint to become healthy.
+3. Verify login and logout for the three portfolio roles.
+4. Verify the dashboard and one primary workflow load without 5xx errors.
+5. Confirm the assistant reports **Local fallback** while `AI_ENABLED=false`.
+6. Confirm attachment downloads require an authorized session.
+7. Review recent Render logs for repeated startup, database, authorization, throttling, or API-failure events.
 
-- **Deployment administrator:** provider-controlled account used only to create roles, grants, and recovery databases.
-- **Migration role:** owns ClientDesk schema objects and may run Flyway DDL. Configure it with `SPRING_FLYWAY_USER` and `SPRING_FLYWAY_PASSWORD`.
-- **Application role:** used by the datasource. Grant only `CONNECT`, schema `USAGE`, table `SELECT`, `INSERT`, `UPDATE`, and `DELETE`, plus required sequence privileges.
-- **Backup role:** optional provider-supported role with read-only backup access and no application write privileges.
+### After a Deployment
 
-Do not use a PostgreSQL superuser, database owner, or migration role as `SPRING_DATASOURCE_USERNAME`. Restrict every role to the production database and application host where the provider supports network rules.
+1. Confirm Render deployed the intended backend revision after checks passed.
+2. Confirm Flyway validation and startup complete without unexpected migrations.
+3. Confirm the Vercel stable domain serves the intended frontend revision.
+4. Verify the same-origin `/api/*` rewrite reaches Render.
+5. Smoke-test authentication, CSRF-protected writes, role boundaries, requests, tasks, quotes, attachments, and the configured AI mode.
+6. Confirm production headers remain present on the frontend and API responses.
 
-The deployment administrator should adapt and review this grant pattern for the selected provider:
+## Database Roles and Migrations
+
+Use separate credentials for schema migration and application traffic:
+
+- **Provider administrator:** Neon-controlled account used only for role and recovery administration.
+- **Migration role:** owns or may alter Flyway-managed schema objects.
+- **Application role:** receives only the connection, schema, table, and sequence privileges needed at runtime.
+- **Backup role:** optional read-only recovery role when supported by the provider.
+
+Do not use a PostgreSQL superuser, database owner, or migration role as the normal application datasource user.
+
+A provider administrator should adapt and review this least-privilege pattern before applying it:
 
 ```sql
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
@@ -62,71 +101,98 @@ ALTER DEFAULT PRIVILEGES FOR ROLE clientdesk_migrator IN SCHEMA public
     GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO clientdesk_app;
 ```
 
-The migration role must own, or be authorized to alter, objects managed by Flyway. Test migrations with the same role split in a disposable environment before production.
+Test grant changes and migrations against an isolated database before changing production.
 
-## Backup Policy
+## Backup and Recovery Policy
 
-Protect both PostgreSQL and Cloudinary assets. Database-only backups are incomplete because attachment metadata is stored in PostgreSQL while file bytes are stored as authenticated Cloudinary raw assets.
+Database rows and attachment bytes are stored by different providers. A usable recovery point therefore requires both:
 
-- Enable encrypted automatic database backups with the selected provider.
-- Set a documented recovery point objective and recovery time objective before launch.
-- Retain at least one backup outside the live database failure domain when the provider supports it.
-- Encrypt backups at rest and in transit, and restrict restore/download access.
-- Record a Cloudinary asset inventory for `CLOUDINARY_FOLDER_PREFIX`, including public ID, byte size, and creation time, without recording API credentials or signed delivery URLs.
-- Use Cloudinary backup/versioning features when the selected plan supports them. Otherwise, document the free-tier recovery limitation and retain controlled source copies for portfolio-demo assets.
-- Coordinate database backups and Cloudinary asset inventories by pausing attachment writes during the capture window.
-- Record backup time, retention expiry, encryption status, and restore-test result without recording credentials.
-- Never place production dumps in either Git repository or a public storage bucket.
+- A Neon database backup or logical dump
+- A matching Cloudinary asset inventory or recovery copy for the configured production folder
 
-For a provider-independent logical backup, use `pg_dump --format=custom --no-owner --no-acl` with credentials supplied through a protected password file or secret manager. Do not put passwords directly in command history or process arguments.
+Operational requirements:
 
-## Restore Test
+- Enable the strongest encrypted Neon backup or point-in-time recovery available for the selected plan.
+- Define and record recovery point and recovery time objectives.
+- Restrict backup and restore access.
+- Never place production dumps in Git or public storage.
+- Record Cloudinary public IDs, byte sizes, and creation times without recording API secrets or signed delivery URLs.
+- Coordinate database and attachment inventories so metadata and asset bytes describe the same recovery window.
+- Keep controlled source copies of fictional portfolio assets when provider-plan recovery features are limited.
 
-Test restoration into an isolated, non-production database before launch and at a regular interval:
+Source control cannot verify provider backup retention or restore success. Treat those as operator-owned assurance evidence, not implemented application features.
 
-1. Create an empty recovery database with no public access.
-2. Restore the latest database backup with `pg_restore --clean --if-exists --no-owner --no-acl`.
-3. Point an isolated recovery configuration at a separate private Cloudinary folder or verified recovery copy; never overwrite production assets.
-4. Start the tested backend revision with the restored resources and `AI_ENABLED=false`.
-5. Confirm Flyway validation succeeds and no unexpected migration runs.
-6. Verify login, organization isolation, request access, attachment download, and quote totals.
-7. Compare database attachment metadata with the Cloudinary inventory and investigate missing or orphaned public IDs.
-8. Destroy the temporary environment and securely remove restored secrets and data.
-9. Record duration and outcome. A backup is not considered usable until this test passes.
+## Restore Exercise
 
-## Monitoring And Alerts
+Perform recovery in isolated, non-production resources:
 
-- Monitor `/actuator/health` through the private or platform health-check path.
-- Alert on availability failures, database connection exhaustion, storage capacity, repeated restarts, and elevated 5xx rates.
-- Alert on repeated `auth_login_rate_limited`, `authorization_denied`, `api_rate_limited`, and `api_failure` events.
-- Keep logs encrypted, access-controlled, and retained only as long as operationally required.
-- Verify rate limiting at the deployed instance count. The current limiter is in-memory and applies per backend instance.
-- Monitor Cloudinary credit/storage/bandwidth usage alongside application attachment quotas.
-- Monitor OpenAI usage and budget whenever real AI is enabled.
+1. Create an empty private PostgreSQL recovery database.
+2. Restore the selected Neon backup or logical dump without overwriting production.
+3. Configure a separate Cloudinary recovery folder or verified recovery copy.
+4. Start the deployed backend revision with `AI_ENABLED=false`.
+5. Confirm Flyway validation succeeds without an unexpected migration.
+6. Verify login, organization isolation, request access, quote totals, and attachment downloads.
+7. Compare attachment metadata with the Cloudinary recovery inventory.
+8. Record timing, missing assets, orphaned assets, and the final result without recording credentials.
+9. Destroy temporary recovery resources and remove their secrets securely.
+
+A backup is not considered operationally proven until a restore exercise succeeds. The repository does not claim that provider restore testing is automated.
+
+## Monitoring and Alerts
+
+Monitor:
+
+- Render health-check failures and repeated restarts
+- Backend 5xx responses and database connection exhaustion
+- Neon storage, connection, and backup status
+- Cloudinary storage, credit, and bandwidth usage
+- Repeated authentication failures, authorization denials, throttling, and API failures
+- OpenAI usage and budget whenever real AI is intentionally enabled
+
+Important structured events include:
+
+```text
+auth_login_failed
+auth_login_rate_limited
+authentication_required
+authorization_denied
+api_rate_limited
+api_failure
+```
+
+The current rate limiter and sessions are instance-local. Reassess monitoring and persistence before horizontal scaling.
 
 ## Secret Rotation
 
-Rotate database, hosting, and OpenAI credentials after suspected exposure and on the provider's normal rotation schedule. Update the secret manager first, restart or redeploy the affected service, verify health, then revoke the old credential. Invalidate active application sessions after an authentication-related incident or session-secret exposure.
+1. Create the replacement credential in the provider secret manager.
+2. Update Render or the affected service without exposing the value in logs or chat.
+3. Restart or redeploy the affected component.
+4. Verify health and the relevant workflow.
+5. Revoke the previous credential.
+6. Invalidate application sessions after authentication-related exposure.
 
-## Incident Checklist
+Rotate immediately after suspected exposure and follow provider schedules for routine rotation.
 
-1. Disable affected integrations or public traffic when containment is required.
-2. Preserve access-controlled logs and record the deployment revision and event time range.
-3. Rotate exposed credentials and invalidate affected sessions.
-4. Check organization-scoped access, database changes, file downloads, and AI usage.
-5. Restore from a verified backup if integrity is uncertain.
-6. Patch and test the cause before reopening traffic.
-7. Document impact, remediation, and follow-up controls without copying sensitive customer data into tickets.
+## Incident Response
 
-## Release Sign-Off
+1. Record the time range, affected provider, and deployed revision.
+2. Disable the affected integration or public traffic when containment is required.
+3. Preserve access-controlled logs without copying customer content into tickets.
+4. Rotate exposed credentials and invalidate affected sessions.
+5. Review organization access, database changes, attachment access, and AI usage.
+6. Restore from a verified recovery point if integrity is uncertain.
+7. Patch and test the cause before reopening traffic.
+8. Document impact, remediation, and follow-up controls without sensitive data.
 
-- [ ] Production frontend API URL is configured and uses HTTPS.
-- [ ] Production profile starts successfully with constrained proxy settings.
-- [ ] Database is private, TLS-protected, backed up, and uses separate migration and application roles.
-- [ ] A database and attachment restore test has passed.
-- [ ] Attachment storage is private, persistent, capacity-monitored, and backed up.
-- [ ] Hosting secrets contain no demo or development credentials.
-- [ ] CI tests, dependency review, secret scanning, and CodeQL are green on GitHub.
-- [ ] Security logs and alerts are configured and access-controlled.
-- [ ] Staging smoke tests cover authentication, CSRF, roles, organization isolation, uploads, and AI modes.
-- [ ] A staging dynamic security scan has no unresolved release-blocking finding.
+## Operational Assurance Status
+
+The repository and deployed application provide evidence for application behavior, production configuration guards, health checks, provider integration, and CI controls. The following require recurring operator or provider evidence and must not be implied as permanently complete by the README:
+
+- Backup retention and encryption status
+- Successful database and Cloudinary recovery exercises
+- Centralized alert delivery and log-retention settings
+- Provider least-privilege grants remaining unchanged
+- External dynamic security scanning
+- Credential-rotation exercises
+
+Use [SECURITY_LOGGING.md](./SECURITY_LOGGING.md) for event and data-exclusion rules and [SECURITY_BASELINE.md](./SECURITY_BASELINE.md) for the reviewed application security posture.

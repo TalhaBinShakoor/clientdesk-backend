@@ -1,118 +1,140 @@
 # ClientDesk Deployment Safety
 
-## AI Demo Modes
+Review date: 2026-08-12
 
-ClientDesk can run safely in three AI modes.
+This document describes the safe deployment modes for the public ClientDesk portfolio environment. It records configuration names and expected behavior only; real values belong in provider secret managers and must never be committed to Git.
 
-### AI Spending Off
+## Current Production Topology
 
-Use this for public demos when OpenAI spending should be fully disabled.
+```text
+Browser
+  → stable Angular frontend on Vercel
+  → same-origin /api/* rewrite
+  → Spring Boot backend on Render
+  → Neon PostgreSQL 16
+  → Cloudinary authenticated raw assets
+```
 
-Required environment variables:
+- Frontend: `https://clientdesk-omega.vercel.app`
+- Backend health: `https://clientdesk-backend.onrender.com/actuator/health`
+- Backend hosting: Render free web service
+- Database: Neon PostgreSQL 16
+- Attachment storage: Cloudinary authenticated raw assets
+- Production profile: `prod`
+
+Only the stable frontend URL should be published or used for portfolio browser testing. Render cold starts remain an expected infrastructure limitation.
+
+## Production AI Modes
+
+### Public Portfolio Mode — Current
+
+Use this mode when the application should remain demonstrable without paid AI traffic.
 
 ```text
 AI_ENABLED=false
-OPENAI_API_KEY=
+OPENAI_API_KEY=<unset or blank>
 ```
 
 Expected behavior:
 
-- AI assistant endpoints stay available.
-- Responses use the local fallback generator.
-- No OpenAI API calls are made.
-- The app remains demoable without AI spending.
+- Summary and drafted-reply endpoints remain available to authorized roles.
+- Responses use the deterministic local generator.
+- Responses identify their source as `LOCAL_FALLBACK`.
+- No OpenAI API call is attempted.
+- The frontend displays **Local fallback**.
 
-### Fallback AI Only
-
-Use this when no OpenAI key is configured.
-
-Required environment variables:
-
-```text
-AI_ENABLED=true
-OPENAI_API_KEY=
-```
-
-Expected behavior:
-
-- AI assistant endpoints stay available.
-- Responses use the local fallback generator.
-- No OpenAI API calls are made because the API key is blank.
+This is the current production configuration and is an expected state, not a defect.
 
 ### Real AI Enabled
 
-Use this only when OpenAI spending is intentionally enabled.
-
-Required environment variables:
+Use this mode only for an intentional, budgeted demonstration.
 
 ```text
 AI_ENABLED=true
-OPENAI_API_KEY=<production OpenAI API key>
+OPENAI_API_KEY=<secret supplied by the hosting platform>
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=<reviewed supported model>
 ```
 
 Expected behavior:
 
-- AI assistant endpoints call OpenAI.
-- If OpenAI is unavailable or returns an unusable response, ClientDesk falls back to the local generator.
+- Authorized assistant requests call OpenAI over HTTPS.
+- Requests use bounded context and output limits with storage disabled.
+- Per-user and per-organization rate limits remain active.
+- Provider failures or unusable responses fall back to the local generator.
+- The response source identifies whether OpenAI or the local fallback produced the result.
 
-## Backend Environment Variables
+The production guard refuses `AI_ENABLED=true` when the API key is blank or the provider URL is unsafe.
 
-Required for deployment:
+### Non-Production Fallback Exercise
+
+Local or test environments may exercise fallback behavior with AI enabled and no key. Do not document that combination as a production mode: the `prod` safety guard intentionally rejects it.
+
+## Portfolio Account Safety
+
+- Production portfolio accounts are provisioned separately from the repository's development seed identities.
+- Each role uses a unique password stored outside Git and never pasted into documentation or chat.
+- The repeatable `demo` Flyway seed must not be activated with the normal production profile.
+- The production guard rejects known development demo identities and data.
+- Public documentation may name the available roles, but it must not publish account passwords.
+- The public portfolio environment must contain fictional data only.
+
+## Required Production Configuration
 
 ```text
 SPRING_PROFILES_ACTIVE=prod
-SPRING_DATASOURCE_URL=<production PostgreSQL JDBC URL>
-SPRING_DATASOURCE_USERNAME=<least-privilege application database username>
-SPRING_DATASOURCE_PASSWORD=<application database password>
-SPRING_FLYWAY_USER=<database migration username>
-SPRING_FLYWAY_PASSWORD=<database migration password>
-FRONTEND_ORIGIN=https://<production frontend host>
-TRUSTED_PROXY_IP_PATTERN=<constrained hosting proxy IP regex>
+SPRING_DATASOURCE_URL=<Neon PostgreSQL JDBC URL with TLS>
+SPRING_DATASOURCE_USERNAME=<least-privilege application role>
+SPRING_DATASOURCE_PASSWORD=<secret>
+SPRING_FLYWAY_USER=<migration role>
+SPRING_FLYWAY_PASSWORD=<secret>
+FRONTEND_ORIGIN=https://clientdesk-omega.vercel.app
+TRUSTED_PROXY_IP_PATTERN=<constrained Render proxy pattern>
 ATTACHMENT_STORAGE_PROVIDER=cloudinary
-CLOUDINARY_CLOUD_NAME=<production Cloudinary cloud name>
-CLOUDINARY_API_KEY=<dedicated production API key>
-CLOUDINARY_API_SECRET=<dedicated production API secret>
+CLOUDINARY_CLOUD_NAME=<secret-managed Cloudinary cloud name>
+CLOUDINARY_API_KEY=<secret>
+CLOUDINARY_API_SECRET=<secret>
 CLOUDINARY_FOLDER_PREFIX=clientdesk/production/attachments
 AI_ENABLED=false
-OPENAI_API_KEY=
+OPENAI_API_KEY=<unset or blank>
 ```
 
-Optional AI and rate-limit tuning:
+Optional reviewed tuning includes:
 
 ```text
-OPENAI_MODEL=gpt-5-nano
-AI_RATE_LIMIT_PER_USER=20
-AI_RATE_LIMIT_PER_ORGANIZATION=100
-API_RATE_LIMIT_WINDOW_SECONDS=60
-AUTH_RATE_LIMIT_WINDOW_SECONDS=900
+OPENAI_MODEL
+OPENAI_CONNECT_TIMEOUT
+OPENAI_READ_TIMEOUT
+AI_RATE_LIMIT_PER_USER
+AI_RATE_LIMIT_PER_ORGANIZATION
+API_RATE_LIMIT_WINDOW_SECONDS
+AUTH_RATE_LIMIT_WINDOW_SECONDS
 ```
 
-Keep rate limiting enabled. The complete environment, database, backup, attachment, monitoring, and restore checklist is in [PRODUCTION_OPERATIONS.md](./PRODUCTION_OPERATIONS.md). The reviewed security posture and remaining deployment gates are in [SECURITY_BASELINE.md](./SECURITY_BASELINE.md).
+Do not weaken secure cookies, request limits, upload validation, safe errors, or rate limiting to simplify deployment.
 
-## OpenAI Budget And Usage Checklist
+## Secret Handling
 
-Before enabling real AI in production:
+- Store production credentials only in Render, Neon, Cloudinary, or another approved secret manager.
+- Never place secrets in Git, workflow files, frontend code, screenshots, logs, command history, or support messages.
+- Keep separate migration and application database credentials.
+- Use a dedicated OpenAI project and key if paid AI is enabled.
+- Rotate a credential after suspected exposure and revoke the previous value after the replacement is verified.
+- Treat signed attachment URLs, session identifiers, CSRF tokens, and database dumps as sensitive.
 
-- Create a dedicated OpenAI project for ClientDesk.
-- Add only the production API key to the deployment platform.
-- Set a monthly project budget.
-- Set a low alert threshold before the full budget is reached.
-- Start with `AI_ENABLED=false` after deployment.
-- Turn on `AI_ENABLED=true` only for an intentional demo.
-- Check OpenAI usage after each public demo.
-- Rotate the API key if it was exposed or copied into an unsafe place.
-- Turn `AI_ENABLED=false` again when real AI is not needed.
+## Recurring Public-Demo Checks
 
-## Public Deployment Checklist
+Before sharing or rehearsing the portfolio demo:
 
-Before sharing the public demo URL:
+- Open only the stable frontend URL.
+- Allow for a Render cold start, then confirm the health endpoint returns healthy status.
+- Confirm login and logout for each portfolio role without exposing passwords.
+- Confirm ADMIN, TEAM_MEMBER, and CLIENT authorization boundaries.
+- Confirm CLIENT-created requests begin as `NEW`.
+- Confirm attachment upload and download remain authenticated.
+- Confirm the assistant displays **Local fallback** while paid AI is disabled.
+- Confirm `/api/*` traffic uses the Vercel same-origin rewrite.
+- Confirm no secret values or real customer data appear in the browser, logs, or screenshots.
+- Confirm CI and security checks are green for the deployed revisions.
 
-- Confirm the backend health endpoint is available.
-- Choose and document the Day 16 demo-access strategy; do not combine the known demo seed identities with the `prod` profile.
-- Confirm AI summary works with `AI_ENABLED=false`.
-- Confirm AI draft reply works with `AI_ENABLED=false`.
-- Confirm rate limiting is enabled.
-- Confirm no secret values are committed to Git.
-- Confirm a `prod` environment contains no known production-forbidden demo identities.
-- Confirm the frontend production build points to the deployed HTTPS API.
-- Confirm the database restore and Cloudinary attachment inventory/recovery checks have passed.
+Database recovery, Cloudinary recovery, monitoring, and incident procedures are maintained in [PRODUCTION_OPERATIONS.md](./PRODUCTION_OPERATIONS.md). The current reviewed security posture is summarized in [SECURITY_BASELINE.md](./SECURITY_BASELINE.md).
